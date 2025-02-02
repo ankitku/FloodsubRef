@@ -4,6 +4,6 @@
 (include-book "bn")
 (include-book "fn")
 (include-book "f2b-commit")
-;(include-book "f2b-ref")
-(include-book "f2b-ref2")
-(include-book "mn")
+(include-book "good-fn")
+;; Currently cleaning up some thms in f2b-ref2
+;(include-book "f2b-ref2")

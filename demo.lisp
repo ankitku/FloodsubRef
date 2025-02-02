@@ -1,5 +1,5 @@
 (in-package "ACL2S")
-(include-book "f2b-ref2")
+(include-book "good-fn")
 
 ;;---------------------------------------------------
 ;; Broadcast Network state and transition
@@ -534,6 +534,9 @@
         (s-bnp u)
         (rel-step-bn s u))))
 
+;; NOTICE : the following forms are from f2b-ref2, which is not imported at
+;; this time.
+
 ;; We are now ready to prove refinement.
 ;;---------------------------------------------------
 ;; WEB 1
@@ -697,6 +700,7 @@
 ;; Finally, our refinement theorem, along with required conditions in
 ;; the hypotheses.
 
+;; Currently working on cleaning up this thm, remove refinement conditions
 (property web3x (s u w :borf)
   :check-contracts? nil
 
@@ -707,77 +711,12 @@
             (f2b-refinement-conditions s
                                        (br-mssg-witness (f2b s) (f2b u))
                                        (car (bn-join-witness (f2b u)
-                                                             (f2b s)))))
-        (=> (^ (s-bnp s) (s-fnp w))
-            (f2b-refinement-conditions w
-                                       (br-mssg-witness (f2b w) u)
-                                       (car (bn-join-witness u (f2b w)))))
-        (=> (^ (s-fnp s) (s-fnp w))
-            (f2b-refinement-conditions w
-                                       (br-mssg-witness (f2b s) (f2b u))
-                                       (car (bn-join-witness (f2b u)
                                                              (f2b s))))))
-(let ((v (exists-v s u w)))
-  (v (^ (rel-> w v)
-        (rel-B u v))
-     (^ (rel-> w v)
-        (rel-B s v)
-        (< (erankl v u)
-           (erankl w u))))))
+  (let ((v (exists-v s u w)))
+    (v (^ (rel-> w v)
+          (rel-B u v))
+       (^ (rel-> w v)
+          (rel-B s v)
+          (< (erankl v u)
+             (erankl w u))))))
 
-;; TODO : add let in the original proof.
-
-;; TODO : write up some text on what i have been doing, for Eth money.
-
-;; add as an axiom : about graph : irrelevant to what i am doing
-;; about connectivity.
-;; identify list of hyps, graph theoretic properties i am not proving.
-
-;; use axioms to prove:
-;; draining the network leads to broadcasting all messages.
-;; axioms depend on graphtheory that i don't care about.
-
-
-
-
-
-
-
-
-;; PETE
-;; todo : from any state, possible to make a non-skip move?
-;; yes, bcast or produce.
-
-
-;; interesting to write things i learnt while proving refinement,
-;; interesting considerations, failed attempts, not easy to do this.
-
-
-(defmacro f2b-refinement-conditions (s m p)
-  `(^ (=> (^ (in ,m (fn-pending-mssgs ,s))
-             (! (in ,m (fn-pending-mssgs (forward-fn
-                                          (find-forwarder ,s ,m)
-                                          ,m ,s)))))
-          (== (f2b (forward-fn
-                    (find-forwarder ,s ,m)
-                    ,m ,s))
-              (broadcast ,m (f2b ,s))))
-      ;; put this in the relation, saying here is why i need, for the
-      ;; thm to be proved.
-      (=> (mget ,p ,s)
-          (== (fn-pending-mssgs (leave-fn ,p ,s))
-              (fn-pending-mssgs ,s)))
-      
-      (=> (in ,m (fn-pending-mssgs ,s))
-          (^ (mget (mget :or ,m) ,s) ;; origin still exists
-             (in (mget :tp ,m)       ;; that can broadcast
-              (mget :pubs (mget (mget :or ,m) ,s)))))
-      
-      (^ ;; Invariant
-       (=> (in ,m (mget :pending (mget (find-forwarder ,s ,m) ,s)))     
-           (! (in ,m (mget :seen (mget (find-forwarder ,s ,m) ,s)))))
-       
-       ;; Invariant
-       (! (in (find-forwarder ,s ,m)
-              (mget (mget :tp ,m)
-                    (mget :nsubs (mget (find-forwarder ,s ,m) ,s))))))))
