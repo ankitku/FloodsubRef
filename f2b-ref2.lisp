@@ -1,5 +1,5 @@
 (in-package "ACL2S")
-(include-book "f2b-commit")
+(include-book "good-fn")
 
 ;; -------------------------------------------------------
 ;; Proof of refinement : FloodNet refines BroadcastNet
@@ -38,7 +38,6 @@
 (property x-s-sb-s-fn (x :s-bn :s-fn)
   (null x) 
   :rule-classes :forward-chaining)
-
 
 
 (definec rel-wf (x y :borf) :boolean
@@ -179,6 +178,64 @@
                                 (mget :subs (cdar s)))))
    (t nil)))
 
+(encapsulate ()
+  (local
+   (in-theory (enable acl2::maximal-records-theory)))
+
+  (local
+   (property prop=mget-cdr-mget (p :peer s :s-bn)
+     :h (mget p (cdr s))
+     (mget p s)))
+
+  (local
+   (property prop=bn-topics-witness-mget1 (s u :s-bn)
+     :h (bn-topics-witness s u)
+     (mget (car (bn-topics-witness s u)) s)
+     :instructions
+     (:pro
+      (:induct (bn-topics-witness s u)) :bash
+      :pro
+      (= (car (bn-topics-witness s u)) (car (car s)))
+      :prove
+      :pro
+      (:claim (bn-topics-witness (cdr s) (cdr u)))
+      (:claim (mget (car (bn-topics-witness (cdr s) (cdr u)))
+                    (cdr s)))
+      (:dv 1 1) (:r bn-topics-witness) :s :top
+      (:prove :hints (("Goal" :use ((:instance prop=mget-cdr-mget
+                                               (p (car (bn-topics-witness
+                                                        (cdr s) (cdr u)))))))))
+      :bash
+      )))
+
+  (local
+   (property prop=bn-topics-witness-mget2 (s u :s-bn)
+     :h (bn-topics-witness s u)
+     (mget (car (bn-topics-witness s u)) u)
+     :instructions
+     (:pro
+      (:induct (bn-topics-witness s u)) :bash
+      :pro
+      (= (car (bn-topics-witness s u)) (car (car u)))
+      :prove
+      :pro
+      (:claim (bn-topics-witness (cdr s) (cdr u)))
+      (:claim (mget (car (bn-topics-witness (cdr s) (cdr u)))
+                    (cdr u)))
+      (:dv 1 1) (:r bn-topics-witness) :s :top
+      (:prove :hints (("Goal" :use ((:instance prop=mget-cdr-mget
+                                               (p (car (bn-topics-witness
+                                                        (cdr s) (cdr u))))
+                                               (s u))))))
+      :bash
+      )))
+
+  (property prop=bn-topics-witness-mget (s u :s-bn)
+    :h (bn-topics-witness s u)
+    (^ (mget (car (bn-topics-witness s u)) s)
+       (mget (car (bn-topics-witness s u)) u))))
+
+
 (definecd rel-subscribe-bn (s u :s-bn) :bool
   (^ (bn-topics-witness s u)
      (mget (car (bn-topics-witness s u)) s)
@@ -305,7 +362,7 @@
            (== u (forward-fn (find-forwarder s m) m s)))
         (rel-forward-help-fn2 s u rst)))))
 
-(property prop=rel-forwardm-help-fn2 (s u :s-fn m :mssg ms :lom)
+(property prop=rel-forward-help-fn2 (s u :s-fn m :mssg ms :lom)
   :h (^ (in m ms)
         (in m (fn-pending-mssgs s))
         (! (in m (mget :seen (mget (find-forwarder s m) s))))  ;; Invariant
@@ -769,6 +826,7 @@
             (== u (forward-fn (find-forwarder s (br-mssg-witness (f2b s) (f2b u)))
                               (br-mssg-witness (f2b s) (f2b u)) s)))
          :hints (("Goal" :in-theory (enable rel-forward-fn1))))
+        :s
         (= (f2b u)
            (f2b (forward-fn (find-forwarder s (br-mssg-witness (f2b s) (f2b u)))
                             (br-mssg-witness (f2b s) (f2b u)) s)))
@@ -920,7 +978,6 @@
            :hints (("Goal" :use ((:instance web3-urel->v1-help)))))
    (:claim (rel-B u (exists-v1 s u))
            :hints (("Goal" :use ((:instance web3-uBv1-help)))))
-           
    :s))
 
 
@@ -956,6 +1013,44 @@
                       (cdr (bn-topics-witness u (f2b w)))
                       w))))
 
+(property prop=exists-v21-good (u :s-bn w :s-fn)
+  :h (good-s-fnp w)
+  (good-s-fnp (exists-v21 u w))
+  :instructions
+  (:pro
+   (:casesplit (rel-subscribe-bn (f2b w) u))
+   (:claim (bn-topics-witness (f2b w) u)
+           :hints (("Goal" :in-theory (enable rel-subscribe-bn))))
+   (= (exists-v21 u w)
+      (subscribe-fn (car (bn-topics-witness (f2b w) u))
+                    (cdr (bn-topics-witness (f2b w) u))
+                    w))
+   (:claim (mget (car (bn-topics-witness (f2b w) u)) w))
+   (:prove :hints
+           (("Goal" :use ((:instance prop=good-s-fn-subscribe
+                                     (p (car (bn-topics-witness (f2b w) u)))
+                                     (topics (cdr (bn-topics-witness
+                                                   (f2b w) u)))
+                                     (s w))))))
+   (:casesplit (rel-unsubscribe-bn (f2b w) u))
+   (:claim (bn-topics-witness u (f2b w))
+           :hints (("Goal" :in-theory (enable rel-unsubscribe-bn))))
+   (= (exists-v21 u w)
+      (unsubscribe-fn (car (bn-topics-witness u (f2b w)))
+                      (cdr (bn-topics-witness u (f2b w)))
+                      w))
+   (:claim (mget (car (bn-topics-witness u (f2b w))) w))
+
+   (:prove :hints
+           (("Goal" :use ((:instance prop=good-s-fn-unsubscribe
+                                     (p (car (bn-topics-witness u (f2b w))))
+                                     (topics (cdr (bn-topics-witness
+                                                   u (f2b w))))
+                                     (s w))))))
+   :bash
+   ))
+ 
+  
 (definec exists-v22 (u :s-bn w :s-fn) :s-fn
   :body-contracts-hints (("Goal" :use ((:instance prop=f2b-produce-hyps
                                                   (s w)
@@ -1008,1106 +1103,1108 @@
          (rel-leave-bn (f2b w) u))
       (exists-v23 u w))))
 
+;; ANKIT : I am updating the rest of the file, so
+;; commenting the rest if this file
 
-(property web3-uBv2-help1 (w :s-fn u :s-bn)
-  :check-contracts? nil
-  :h (^ (rel-skip-bn (f2b w) u)
-        (good-s-fnp w))
-  (^ (rel-B u w)
-     (rel-skip-fn w w))
-  :hints (("Goal" :in-theory (enable rel-skip-fn rel-b
-                                     rel-skip-bn))))
+;; (property web3-uBv2-help1 (w :s-fn u :s-bn)
+;;   :check-contracts? nil
+;;   :h (^ (rel-skip-bn (f2b w) u)
+;;         (good-s-fnp w))
+;;   (^ (rel-B u w)
+;;      (rel-skip-fn w w))
+;;   :hints (("Goal" :in-theory (enable rel-skip-fn rel-b
+;;                                      rel-skip-bn))))
 
-(i-am-here)
-;; need to prove that exist-v2 produces good states.
+;; (i-am-here)
+;; ;; need to prove that exist-v2 produces good states.
 
-(property web3-uBv2-help2 (w :s-fn u :s-bn)
-  :check-contracts? nil
-  :h (^ (rel-broadcast-bn (f2b w) u)
-        (good-s-fnp w)
-        ;; CASE
-        (^ (in (br-mssg-witness (f2b w) u) (fn-pending-mssgs w))
-           (!= (fn-pending-mssgs (forward-fn (find-forwarder w (br-mssg-witness
-                                                                (f2b w) u))
-                                             (br-mssg-witness (f2b w) u) w))
-               (fn-pending-mssgs w)))
+;; (property web3-uBv2-help2 (w :s-fn u :s-bn)
+;;   :check-contracts? nil
+;;   :h (^ (rel-broadcast-bn (f2b w) u)
+;;         (good-s-fnp w)
+;;         ;; CASE
+;;         (^ (in (br-mssg-witness (f2b w) u) (fn-pending-mssgs w))
+;;            (!= (fn-pending-mssgs (forward-fn (find-forwarder w (br-mssg-witness
+;;                                                                 (f2b w) u))
+;;                                              (br-mssg-witness (f2b w) u) w))
+;;                (fn-pending-mssgs w)))
 
-        ;; CONDITION 1 :
-        (=> (^ (in (br-mssg-witness (f2b w) u)
-                   (fn-pending-mssgs w))
-               (! (in (br-mssg-witness (f2b w) u)
-                      (fn-pending-mssgs (forward-fn
-                                         (find-forwarder w (br-mssg-witness (f2b w) u))
-                                         (br-mssg-witness (f2b w) u) w)))))
-            (== (f2b (forward-fn (find-forwarder w (br-mssg-witness (f2b w) u))
-                                 (br-mssg-witness (f2b w) u) w))
-                (broadcast (br-mssg-witness (f2b w) u) (f2b w)))))
-  (rel-B u (forward-fn (find-forwarder w (br-mssg-witness (f2b w) u))
-                       (br-mssg-witness (f2b w) u) w))
-  :instructions
-  (:pro
-   (:dv 1)
-   (= u (broadcast (br-mssg-witness (f2b w) u) (f2b w))
-      :hints (("Goal" :in-theory (enable rel-broadcast-bn))))
-   :top
-   (:claim (br-mssg-witness (f2b w) u)
-           :hints (("Goal" :in-theory (enable rel-broadcast-bn))))
-   (:claim (in (br-mssg-witness (f2b w) u)
-               (mget :pending (mget (find-forwarder w (br-mssg-witness
-                                                       (f2b w) u))
-                                    w)))
-           :hints (("Goal" :use ((:instance find-forwarder-contract
-                                            (s w)
-                                            (m (br-mssg-witness (f2b w) u)))))))
+;;         ;; CONDITION 1 :
+;;         (=> (^ (in (br-mssg-witness (f2b w) u)
+;;                    (fn-pending-mssgs w))
+;;                (! (in (br-mssg-witness (f2b w) u)
+;;                       (fn-pending-mssgs (forward-fn
+;;                                          (find-forwarder w (br-mssg-witness (f2b w) u))
+;;                                          (br-mssg-witness (f2b w) u) w)))))
+;;             (== (f2b (forward-fn (find-forwarder w (br-mssg-witness (f2b w) u))
+;;                                  (br-mssg-witness (f2b w) u) w))
+;;                 (broadcast (br-mssg-witness (f2b w) u) (f2b w)))))
+;;   (rel-B u (forward-fn (find-forwarder w (br-mssg-witness (f2b w) u))
+;;                        (br-mssg-witness (f2b w) u) w))
+;;   :instructions
+;;   (:pro
+;;    (:dv 1)
+;;    (= u (broadcast (br-mssg-witness (f2b w) u) (f2b w))
+;;       :hints (("Goal" :in-theory (enable rel-broadcast-bn))))
+;;    :top
+;;    (:claim (br-mssg-witness (f2b w) u)
+;;            :hints (("Goal" :in-theory (enable rel-broadcast-bn))))
+;;    (:claim (in (br-mssg-witness (f2b w) u)
+;;                (mget :pending (mget (find-forwarder w (br-mssg-witness
+;;                                                        (f2b w) u))
+;;                                     w)))
+;;            :hints (("Goal" :use ((:instance find-forwarder-contract
+;;                                             (s w)
+;;                                             (m (br-mssg-witness (f2b w) u)))))))
    
-   (:claim (! (in (br-mssg-witness (f2b w) u)
-                  (fn-pending-mssgs (forward-fn
-                                     (find-forwarder w (br-mssg-witness (f2b w) u))
-                                     (br-mssg-witness (f2b w) u)
-                                     w))))
-           :hints (("Goal" :use ((:instance
-                                  prop=fn-pending-mssgs-forward-fn
-                                  (m (br-mssg-witness (f2b w) u))
-                                  (p (find-forwarder w (br-mssg-witness (f2b w) u)))
-                                  (s w))))))
-   (:prove :hints (("Goal" :use (b-bnbn))))))
+;;    (:claim (! (in (br-mssg-witness (f2b w) u)
+;;                   (fn-pending-mssgs (forward-fn
+;;                                      (find-forwarder w (br-mssg-witness (f2b w) u))
+;;                                      (br-mssg-witness (f2b w) u)
+;;                                      w))))
+;;            :hints (("Goal" :use ((:instance
+;;                                   prop=fn-pending-mssgs-forward-fn
+;;                                   (m (br-mssg-witness (f2b w) u))
+;;                                   (p (find-forwarder w (br-mssg-witness (f2b w) u)))
+;;                                   (s w))))))
+;;    (:prove :hints (("Goal" :use (b-bnbn))))))
 
 
-(property web3-v2-help1 (m :mssg w :s-fn)
-  :check-contracts? nil
-  :h (^ (mget (find-forwarder w m) w)
-        (in m (mget :pending (mget (find-forwarder w m) w)))
-        (! (in m (mget :seen (mget (find-forwarder w m) w))))
-        (! (in (find-forwarder w m)
-               (mget (mget :tp m)
-                     (mget :nsubs (mget
-                                   (find-forwarder w m)
-                                   w)))))
-        ;; (B s u)
-        (== (fn-pending-mssgs (forward-fn (find-forwarder w m) m w))
-            (fn-pending-mssgs w)))
-  (^ (== (f2b (forward-fn (find-forwarder w m) m w))
-         (f2b w))
-     (< (rankl m (forward-fn (find-forwarder w m) m w))
-        (rankl m w)))
-  :hints (("Goal" :use ((:instance prop=forward-fn-rank
-                                   (p (find-forwarder w m))
-                                   (s w))))))
+;; (property web3-v2-help1 (m :mssg w :s-fn)
+;;   :check-contracts? nil
+;;   :h (^ (mget (find-forwarder w m) w)
+;;         (in m (mget :pending (mget (find-forwarder w m) w)))
+;;         (! (in m (mget :seen (mget (find-forwarder w m) w))))
+;;         (! (in (find-forwarder w m)
+;;                (mget (mget :tp m)
+;;                      (mget :nsubs (mget
+;;                                    (find-forwarder w m)
+;;                                    w)))))
+;;         ;; (B s u)
+;;         (== (fn-pending-mssgs (forward-fn (find-forwarder w m) m w))
+;;             (fn-pending-mssgs w)))
+;;   (^ (== (f2b (forward-fn (find-forwarder w m) m w))
+;;          (f2b w))
+;;      (< (rankl m (forward-fn (find-forwarder w m) m w))
+;;         (rankl m w)))
+;;   :hints (("Goal" :use ((:instance prop=forward-fn-rank
+;;                                    (p (find-forwarder w m))
+;;                                    (s w))))))
 
-(property web3-v2-help2 (m :mssg w :s-fn)
-  :check-contracts? nil
-  :h (^ (mget (mget :or m) w)
-        (new-fn-mssgp m w)
-        (in (mget :tp m)
-            (mget :pubs (mget (mget :or m) w))))
-  (^ (== (f2b (produce-fn m w))
-         (f2b w))
-     (< (rankl m (produce-fn m w))
-        (rankl m w)))
-  :hints (("Goal" :use ((:instance prop=produce-fn-rank
-                                   (s w))))))
+;; (property web3-v2-help2 (m :mssg w :s-fn)
+;;   :check-contracts? nil
+;;   :h (^ (mget (mget :or m) w)
+;;         (new-fn-mssgp m w)
+;;         (in (mget :tp m)
+;;             (mget :pubs (mget (mget :or m) w))))
+;;   (^ (== (f2b (produce-fn m w))
+;;          (f2b w))
+;;      (< (rankl m (produce-fn m w))
+;;         (rankl m w)))
+;;   :hints (("Goal" :use ((:instance prop=produce-fn-rank
+;;                                    (s w))))))
 
-(property web3-v2-help3 (w :s-fn u :s-bn)
-  :check-contracts? nil
-  :h (^ (rel-broadcast-bn (f2b w) u)
+;; (property web3-v2-help3 (w :s-fn u :s-bn)
+;;   :check-contracts? nil
+;;   :h (^ (rel-broadcast-bn (f2b w) u)
 
-        ;; CASE
-        (new-fn-mssgp (br-mssg-witness (f2b w) u) w))
-  (^ (rel-B (f2b w)
-            (produce-fn (br-mssg-witness (f2b w) u) w))
-     (< (rankl (br-mssg-witness (f2b w) u)
-               (produce-fn (br-mssg-witness (f2b w) u) w))
-        (rankl (br-mssg-witness (f2b w) u) w)))
-  :instructions
-  (:pro
-  (:claim (^ (mget (mget :or (br-mssg-witness (f2b w) u)) w)
-              (in (mget :tp (br-mssg-witness (f2b w) u))
-                  (mget :pubs (mget  (mget :or (br-mssg-witness (f2b w) u)) w))))
-           :hints (("Goal" :in-theory (enable rel-broadcast-bn)
-                    :use ((:instance prop=f2b-produce-hyps
-                                     (s w)
-                                     (m (br-mssg-witness (f2b w) u)))))))
-  (:dv 1) (:rewrite b-bnfn) :s :top
-  (:prove :hints (("Goal" :use ((:instance web3-v2-help2
-                                           (m (br-mssg-witness (f2b w) u)))))))))
+;;         ;; CASE
+;;         (new-fn-mssgp (br-mssg-witness (f2b w) u) w))
+;;   (^ (rel-B (f2b w)
+;;             (produce-fn (br-mssg-witness (f2b w) u) w))
+;;      (< (rankl (br-mssg-witness (f2b w) u)
+;;                (produce-fn (br-mssg-witness (f2b w) u) w))
+;;         (rankl (br-mssg-witness (f2b w) u) w)))
+;;   :instructions
+;;   (:pro
+;;   (:claim (^ (mget (mget :or (br-mssg-witness (f2b w) u)) w)
+;;               (in (mget :tp (br-mssg-witness (f2b w) u))
+;;                   (mget :pubs (mget  (mget :or (br-mssg-witness (f2b w) u)) w))))
+;;            :hints (("Goal" :in-theory (enable rel-broadcast-bn)
+;;                     :use ((:instance prop=f2b-produce-hyps
+;;                                      (s w)
+;;                                      (m (br-mssg-witness (f2b w) u)))))))
+;;   (:dv 1) (:rewrite b-bnfn) :s :top
+;;   (:prove :hints (("Goal" :use ((:instance web3-v2-help2
+;;                                            (m (br-mssg-witness (f2b w) u)))))))))
 
-(property web3-v2-help4 (w :s-fn u :s-bn)
-  :check-contracts? nil
-  :h (^ (rel-broadcast-bn (f2b w) u)
+;; (property web3-v2-help4 (w :s-fn u :s-bn)
+;;   :check-contracts? nil
+;;   :h (^ (rel-broadcast-bn (f2b w) u)
 
-        ;; CASE
-        (^ (! (new-fn-mssgp (br-mssg-witness (f2b w) u) w))
-           (in (br-mssg-witness (f2b w) u)
-               (fn-pending-mssgs w))
-           (== (fn-pending-mssgs (forward-fn
-                                  (find-forwarder w (br-mssg-witness (f2b w)
-                                                                     u))
-                                  (br-mssg-witness (f2b w) u) w)) ;; CASE
-               (fn-pending-mssgs w)))
+;;         ;; CASE
+;;         (^ (! (new-fn-mssgp (br-mssg-witness (f2b w) u) w))
+;;            (in (br-mssg-witness (f2b w) u)
+;;                (fn-pending-mssgs w))
+;;            (== (fn-pending-mssgs (forward-fn
+;;                                   (find-forwarder w (br-mssg-witness (f2b w)
+;;                                                                      u))
+;;                                   (br-mssg-witness (f2b w) u) w)) ;; CASE
+;;                (fn-pending-mssgs w)))
 
-        (=> (in (br-mssg-witness (f2b w) u)
-                (mget :pending (mget (find-forwarder w (br-mssg-witness
-                                                        (f2b w) u))
-                                     w))) 
-            (! (in (br-mssg-witness (f2b w) u)
-                   (mget :seen (mget (find-forwarder w (br-mssg-witness
-                                                        (f2b w) u)) w))))) ;; Invariant
+;;         (=> (in (br-mssg-witness (f2b w) u)
+;;                 (mget :pending (mget (find-forwarder w (br-mssg-witness
+;;                                                         (f2b w) u))
+;;                                      w))) 
+;;             (! (in (br-mssg-witness (f2b w) u)
+;;                    (mget :seen (mget (find-forwarder w (br-mssg-witness
+;;                                                         (f2b w) u)) w))))) ;; Invariant
 
-        (! (in (find-forwarder w (br-mssg-witness (f2b w) u))
-               (mget (mget :tp (br-mssg-witness (f2b w) u))
-                     (mget :nsubs (mget (find-forwarder w (br-mssg-witness
-                                                           (f2b w) u))
-                                        w)))))) ;; Invariant
-  (^ (rel-B (f2b w)
-            (forward-fn (find-forwarder w (br-mssg-witness (f2b w) u))
-                        (br-mssg-witness (f2b w) u) w))
-     (< (rankl (br-mssg-witness (f2b w) u)
-               (forward-fn (find-forwarder w (br-mssg-witness
-                                              (f2b w) u))
-                           (br-mssg-witness (f2b w) u) w))
-        (rankl (br-mssg-witness (f2b w) u) w)))
-  :instructions
-  (:pro 
-   (:claim (^ (mget (mget :or (br-mssg-witness (f2b w) u)) w)
-              (in (mget :tp (br-mssg-witness (f2b w) u))
-                  (mget :pubs (mget  (mget :or (br-mssg-witness (f2b w) u)) w))))
-           :hints (("Goal" :in-theory (enable rel-broadcast-bn)
-                    :use ((:instance prop=f2b-produce-hyps
-                                     (s w)
-                                     (m (br-mssg-witness (f2b w) u)))))))
-   (:claim (== (fn-pending-mssgs (forward-fn
-                                  (find-forwarder w (br-mssg-witness
-                                                     (f2b w) u))
-                                  (br-mssg-witness (f2b w) u) w))
-               (fn-pending-mssgs w)))
-   (:dv 1) (:rewrite b-bnfn) :top
-   (:prove :hints (("Goal" :use ((:instance web3-v2-help1
-                                            (m (br-mssg-witness (f2b w) u)))))))))
-
-
-(property web3-v2-help50 (w :s-fn u :s-bn p :peer pubs subs :lot)
-  :check-contracts? nil
-  :h (! (mget p w))
-  (! (in p (topic-lop-map->lop
-            (mget :nsubs
-                  (mget p (join-fn p pubs subs '() w))))))
-  :instructions
-  (:pro
-   (= (join-fn p pubs subs nil w)
-      (mset p (new-joinee-st-fn pubs subs '() w) w)
-      :hints (("Goal" :use ((:instance join-fn-nbrs-nil
-                                       (s w))))))
-   (:prove :hints (("Goal" :in-theory (enable ps-fnp
-                                              calc-nsubs-fn
-                                              new-joinee-st-fn))))))
+;;         (! (in (find-forwarder w (br-mssg-witness (f2b w) u))
+;;                (mget (mget :tp (br-mssg-witness (f2b w) u))
+;;                      (mget :nsubs (mget (find-forwarder w (br-mssg-witness
+;;                                                            (f2b w) u))
+;;                                         w)))))) ;; Invariant
+;;   (^ (rel-B (f2b w)
+;;             (forward-fn (find-forwarder w (br-mssg-witness (f2b w) u))
+;;                         (br-mssg-witness (f2b w) u) w))
+;;      (< (rankl (br-mssg-witness (f2b w) u)
+;;                (forward-fn (find-forwarder w (br-mssg-witness
+;;                                               (f2b w) u))
+;;                            (br-mssg-witness (f2b w) u) w))
+;;         (rankl (br-mssg-witness (f2b w) u) w)))
+;;   :instructions
+;;   (:pro 
+;;    (:claim (^ (mget (mget :or (br-mssg-witness (f2b w) u)) w)
+;;               (in (mget :tp (br-mssg-witness (f2b w) u))
+;;                   (mget :pubs (mget  (mget :or (br-mssg-witness (f2b w) u)) w))))
+;;            :hints (("Goal" :in-theory (enable rel-broadcast-bn)
+;;                     :use ((:instance prop=f2b-produce-hyps
+;;                                      (s w)
+;;                                      (m (br-mssg-witness (f2b w) u)))))))
+;;    (:claim (== (fn-pending-mssgs (forward-fn
+;;                                   (find-forwarder w (br-mssg-witness
+;;                                                      (f2b w) u))
+;;                                   (br-mssg-witness (f2b w) u) w))
+;;                (fn-pending-mssgs w)))
+;;    (:dv 1) (:rewrite b-bnfn) :top
+;;    (:prove :hints (("Goal" :use ((:instance web3-v2-help1
+;;                                             (m (br-mssg-witness (f2b w) u)))))))))
 
 
-(property web3-v2-help51 (w :s-fn u :s-bn)
-  :check-contracts? nil
-  :h (rel-join-bn (f2b w) u)
-  (fn-join-witness w
-                   (join-fn (car (bn-join-witness (f2b w) u))
-                            (mget :pubs (cdr (bn-join-witness (f2b w) u)))
-                            (mget :subs (cdr (bn-join-witness (f2b w) u)))
-                            nil w))
-  :instructions
-  (:pro
-   (:rewrite fn-join-witness) :s :s
-   (:claim (== (rel-join-bn (f2b w) u)
-               (and (bn-join-witness (f2b w) u)
-                    (not (mget (car (bn-join-witness (f2b w) u))
-                               (f2b w)))
-                    (equal u
-                           (join-bn (car (bn-join-witness (f2b w) u))
-                                    (mget :pubs (cdr (bn-join-witness (f2b w) u)))
-                                    (mget :subs (cdr (bn-join-witness (f2b w) u)))
-                                    (f2b w)))))
-           :hints (("Goal" :in-theory (enable rel-join-bn))))
-   (:claim (and (bn-join-witness (f2b w) u)
-                    (not (mget (car (bn-join-witness (f2b w) u))
-                               (f2b w)))
-                    (equal u
-                           (join-bn (car (bn-join-witness (f2b w) u))
-                                    (mget :pubs (cdr (bn-join-witness (f2b w) u)))
-                                    (mget :subs (cdr (bn-join-witness (f2b w) u)))
-                                    (f2b w)))))
+;; (property web3-v2-help50 (w :s-fn u :s-bn p :peer pubs subs :lot)
+;;   :check-contracts? nil
+;;   :h (! (mget p w))
+;;   (! (in p (topic-lop-map->lop
+;;             (mget :nsubs
+;;                   (mget p (join-fn p pubs subs '() w))))))
+;;   :instructions
+;;   (:pro
+;;    (= (join-fn p pubs subs nil w)
+;;       (mset p (new-joinee-st-fn pubs subs '() w) w)
+;;       :hints (("Goal" :use ((:instance join-fn-nbrs-nil
+;;                                        (s w))))))
+;;    (:prove :hints (("Goal" :in-theory (enable ps-fnp
+;;                                               calc-nsubs-fn
+;;                                               new-joinee-st-fn))))))
+
+
+;; (property web3-v2-help51 (w :s-fn u :s-bn)
+;;   :check-contracts? nil
+;;   :h (rel-join-bn (f2b w) u)
+;;   (fn-join-witness w
+;;                    (join-fn (car (bn-join-witness (f2b w) u))
+;;                             (mget :pubs (cdr (bn-join-witness (f2b w) u)))
+;;                             (mget :subs (cdr (bn-join-witness (f2b w) u)))
+;;                             nil w))
+;;   :instructions
+;;   (:pro
+;;    (:rewrite fn-join-witness) :s :s
+;;    (:claim (== (rel-join-bn (f2b w) u)
+;;                (and (bn-join-witness (f2b w) u)
+;;                     (not (mget (car (bn-join-witness (f2b w) u))
+;;                                (f2b w)))
+;;                     (equal u
+;;                            (join-bn (car (bn-join-witness (f2b w) u))
+;;                                     (mget :pubs (cdr (bn-join-witness (f2b w) u)))
+;;                                     (mget :subs (cdr (bn-join-witness (f2b w) u)))
+;;                                     (f2b w)))))
+;;            :hints (("Goal" :in-theory (enable rel-join-bn))))
+;;    (:claim (and (bn-join-witness (f2b w) u)
+;;                     (not (mget (car (bn-join-witness (f2b w) u))
+;;                                (f2b w)))
+;;                     (equal u
+;;                            (join-bn (car (bn-join-witness (f2b w) u))
+;;                                     (mget :pubs (cdr (bn-join-witness (f2b w) u)))
+;;                                     (mget :subs (cdr (bn-join-witness (f2b w) u)))
+;;                                     (f2b w)))))
    
-   (= (f2b (join-fn (car (bn-join-witness (f2b w) u))
-                    (mget :pubs (cdr (bn-join-witness (f2b w) u)))
-                    (mget :subs (cdr (bn-join-witness (f2b w) u)))
-                    nil w))
-      (join-bn (car (bn-join-witness (f2b w) u))
-               (mget :pubs (cdr (bn-join-witness (f2b w) u)))
-               (mget :subs (cdr (bn-join-witness (f2b w) u)))
-               (f2b w))
-      :hints (("Goal" :use ((:instance prop=f2b-join-fn
-                                       (p (car (bn-join-witness (f2b w) u)))
-                                       (s w)
-                                       (nbrs nil)
-                                       (pubs (mget :pubs (cdr (bn-join-witness
-                                                               (f2b w) u))))
-                                       (subs (mget :subs (cdr (bn-join-witness
-                                                               (f2b w)
-                                                               u)))))))))
-   :prove))
+;;    (= (f2b (join-fn (car (bn-join-witness (f2b w) u))
+;;                     (mget :pubs (cdr (bn-join-witness (f2b w) u)))
+;;                     (mget :subs (cdr (bn-join-witness (f2b w) u)))
+;;                     nil w))
+;;       (join-bn (car (bn-join-witness (f2b w) u))
+;;                (mget :pubs (cdr (bn-join-witness (f2b w) u)))
+;;                (mget :subs (cdr (bn-join-witness (f2b w) u)))
+;;                (f2b w))
+;;       :hints (("Goal" :use ((:instance prop=f2b-join-fn
+;;                                        (p (car (bn-join-witness (f2b w) u)))
+;;                                        (s w)
+;;                                        (nbrs nil)
+;;                                        (pubs (mget :pubs (cdr (bn-join-witness
+;;                                                                (f2b w) u))))
+;;                                        (subs (mget :subs (cdr (bn-join-witness
+;;                                                                (f2b w)
+;;                                                                u)))))))))
+;;    :prove))
 
-(property web3-v2-help52 (w :s-fn u :s-bn)
-  :check-contracts? nil
-  :h (^ (rel-join-bn (f2b w) u)
-        (== u (f2b (join-fn (car (bn-join-witness (f2b w) u))
-                            (mget :pubs (cdr (bn-join-witness (f2b w) u)))
-                            (mget :subs (cdr (bn-join-witness (f2b w) u)))
-                            nil
-                            w))))
-  (rel-join-fn w (join-fn (car (bn-join-witness (f2b w) u))
-                          (mget :pubs (cdr (bn-join-witness (f2b w) u)))
-                          (mget :subs (cdr (bn-join-witness (f2b w) u)))
-                          nil
-                          w))
-  :instructions
-  (:pro
-   (:claim (! (mget (car (bn-join-witness (f2b w) u)) w))
-           :hints (("Goal" :in-theory (enable rel-join-bn))))
-   :r
-   (:claim (fn-join-witness w
-                            (join-fn (car (bn-join-witness (f2b w) u))
-                                     (mget :pubs (cdr (bn-join-witness (f2b w) u)))
-                                     (mget :subs (cdr (bn-join-witness (f2b w) u)))
-                                     nil w)))
-   :s
-   (:claim (== (car (fn-join-witness w
-                                     (join-fn (car (bn-join-witness (f2b w) u))
-                                              (mget :pubs (cdr (bn-join-witness (f2b w) u)))
-                                              (mget :subs (cdr (bn-join-witness (f2b w) u)))
-                                              nil w)))
-               (car (bn-join-witness (f2b w) u))))
-   (:claim (bn-join-witness (f2b w) u)) :s :bash
-   (= (calc-nsubs-fn nil w nil) nil
-      :hints (("Goal" :in-theory (enable calc-nsubs-fn))))
-   :bash
-   (= (calc-nsubs-fn nil w nil) nil
-      :hints (("Goal" :in-theory (enable calc-nsubs-fn))))
-   :bash
-   (= (calc-nsubs-fn nil w nil) nil
-      :hints (("Goal" :in-theory (enable calc-nsubs-fn))))
-   :bash))
+;; (property web3-v2-help52 (w :s-fn u :s-bn)
+;;   :check-contracts? nil
+;;   :h (^ (rel-join-bn (f2b w) u)
+;;         (== u (f2b (join-fn (car (bn-join-witness (f2b w) u))
+;;                             (mget :pubs (cdr (bn-join-witness (f2b w) u)))
+;;                             (mget :subs (cdr (bn-join-witness (f2b w) u)))
+;;                             nil
+;;                             w))))
+;;   (rel-join-fn w (join-fn (car (bn-join-witness (f2b w) u))
+;;                           (mget :pubs (cdr (bn-join-witness (f2b w) u)))
+;;                           (mget :subs (cdr (bn-join-witness (f2b w) u)))
+;;                           nil
+;;                           w))
+;;   :instructions
+;;   (:pro
+;;    (:claim (! (mget (car (bn-join-witness (f2b w) u)) w))
+;;            :hints (("Goal" :in-theory (enable rel-join-bn))))
+;;    :r
+;;    (:claim (fn-join-witness w
+;;                             (join-fn (car (bn-join-witness (f2b w) u))
+;;                                      (mget :pubs (cdr (bn-join-witness (f2b w) u)))
+;;                                      (mget :subs (cdr (bn-join-witness (f2b w) u)))
+;;                                      nil w)))
+;;    :s
+;;    (:claim (== (car (fn-join-witness w
+;;                                      (join-fn (car (bn-join-witness (f2b w) u))
+;;                                               (mget :pubs (cdr (bn-join-witness (f2b w) u)))
+;;                                               (mget :subs (cdr (bn-join-witness (f2b w) u)))
+;;                                               nil w)))
+;;                (car (bn-join-witness (f2b w) u))))
+;;    (:claim (bn-join-witness (f2b w) u)) :s :bash
+;;    (= (calc-nsubs-fn nil w nil) nil
+;;       :hints (("Goal" :in-theory (enable calc-nsubs-fn))))
+;;    :bash
+;;    (= (calc-nsubs-fn nil w nil) nil
+;;       :hints (("Goal" :in-theory (enable calc-nsubs-fn))))
+;;    :bash
+;;    (= (calc-nsubs-fn nil w nil) nil
+;;       :hints (("Goal" :in-theory (enable calc-nsubs-fn))))
+;;    :bash))
                    
-(property web3-v2-help5 (w :s-fn u :s-bn)
-  :h (^ (not (rel-skip-bn (f2b w) u))
-        (not (rel-broadcast-bn (f2b w) u))
-        (not (rel-subscribe-bn (f2b w) u))
-        (not (rel-unsubscribe-bn (f2b w) u))
-        (rel-join-bn (f2b w) u))
-  (^ (rel-> w (exists-v2 u w))
-     (rel-b u (exists-v2 u w)))
-  :instructions
-  (:pro
-   (:claim (^ (bn-join-witness (f2b w) u)
-              (! (mget (car (bn-join-witness
-                             (f2b w) u))
-                       (f2b w)))
-              (== u (join-bn (car (bn-join-witness (f2b w) u))
-                             (mget :pubs (cdr (bn-join-witness (f2b w) u)))
-                             (mget :subs (cdr (bn-join-witness (f2b w) u)))
-                             (f2b w))))
-           :hints (("Goal" :in-theory (enable rel-join-bn))))
-   (:claim (== (exists-v2 u w)
-               (join-fn (car (bn-join-witness (f2b w) u))
-                        (mget :pubs (cdr (bn-join-witness (f2b w) u)))
-                        (mget :subs (cdr (bn-join-witness (f2b w) u)))
-                        '()
-                        w)))
-   (:equiv (exists-v2 u w)
-           (join-fn (car (bn-join-witness (f2b w) u))
-                    (mget :pubs (cdr (bn-join-witness (f2b w) u)))
-                    (mget :subs (cdr (bn-join-witness (f2b w) u)))
-                    '()
-                    w))
+;; (property web3-v2-help5 (w :s-fn u :s-bn)
+;;   :h (^ (not (rel-skip-bn (f2b w) u))
+;;         (not (rel-broadcast-bn (f2b w) u))
+;;         (not (rel-subscribe-bn (f2b w) u))
+;;         (not (rel-unsubscribe-bn (f2b w) u))
+;;         (rel-join-bn (f2b w) u))
+;;   (^ (rel-> w (exists-v2 u w))
+;;      (rel-b u (exists-v2 u w)))
+;;   :instructions
+;;   (:pro
+;;    (:claim (^ (bn-join-witness (f2b w) u)
+;;               (! (mget (car (bn-join-witness
+;;                              (f2b w) u))
+;;                        (f2b w)))
+;;               (== u (join-bn (car (bn-join-witness (f2b w) u))
+;;                              (mget :pubs (cdr (bn-join-witness (f2b w) u)))
+;;                              (mget :subs (cdr (bn-join-witness (f2b w) u)))
+;;                              (f2b w))))
+;;            :hints (("Goal" :in-theory (enable rel-join-bn))))
+;;    (:claim (== (exists-v2 u w)
+;;                (join-fn (car (bn-join-witness (f2b w) u))
+;;                         (mget :pubs (cdr (bn-join-witness (f2b w) u)))
+;;                         (mget :subs (cdr (bn-join-witness (f2b w) u)))
+;;                         '()
+;;                         w)))
+;;    (:equiv (exists-v2 u w)
+;;            (join-fn (car (bn-join-witness (f2b w) u))
+;;                     (mget :pubs (cdr (bn-join-witness (f2b w) u)))
+;;                     (mget :subs (cdr (bn-join-witness (f2b w) u)))
+;;                     '()
+;;                     w))
 
-   (:claim (! (mget (car (bn-join-witness (f2b w) u)) w))) 
-   (:claim (! (in (car (bn-join-witness (f2b w) u))
-                  (topic-lop-map->lop
-                   (mget
-                    :nsubs (mget (car (bn-join-witness (f2b w) u))
-                                 (join-fn (car (bn-join-witness (f2b w) u))
-                                          (mget :pubs (cdr (bn-join-witness (f2b w) u)))
-                                          (mget :subs (cdr (bn-join-witness (f2b w) u)))
-                                          nil
-                                          w))))))
-           :hints (("Goal" :use ((:instance web3-v2-help50
-                                            (p (car (bn-join-witness (f2b w) u)))
-                                            (u (f2b w))
-                                            (pubs (mget :pubs (cdr
-                                                               (bn-join-witness
-                                                                (f2b w) u))))
-                                            (subs (mget :subs (cdr
-                                                               (bn-join-witness
-                                                                (f2b w)
-                                                                u)))))))))
+;;    (:claim (! (mget (car (bn-join-witness (f2b w) u)) w))) 
+;;    (:claim (! (in (car (bn-join-witness (f2b w) u))
+;;                   (topic-lop-map->lop
+;;                    (mget
+;;                     :nsubs (mget (car (bn-join-witness (f2b w) u))
+;;                                  (join-fn (car (bn-join-witness (f2b w) u))
+;;                                           (mget :pubs (cdr (bn-join-witness (f2b w) u)))
+;;                                           (mget :subs (cdr (bn-join-witness (f2b w) u)))
+;;                                           nil
+;;                                           w))))))
+;;            :hints (("Goal" :use ((:instance web3-v2-help50
+;;                                             (p (car (bn-join-witness (f2b w) u)))
+;;                                             (u (f2b w))
+;;                                             (pubs (mget :pubs (cdr
+;;                                                                (bn-join-witness
+;;                                                                 (f2b w) u))))
+;;                                             (subs (mget :subs (cdr
+;;                                                                (bn-join-witness
+;;                                                                 (f2b w)
+;;                                                                 u)))))))))
 
-   (:claim (== (f2b (join-fn (car (bn-join-witness (f2b w) u))
-                    (mget :pubs (cdr (bn-join-witness (f2b w) u)))
-                    (mget :subs (cdr (bn-join-witness (f2b w) u)))
-                    '()
-                    w))
-               (join-bn (car (bn-join-witness (f2b w) u))
-                        (mget :pubs (cdr (bn-join-witness (f2b w) u)))
-                        (mget :subs (cdr (bn-join-witness (f2b w) u)))
-                        (f2b w)))
-           :hints (("Goal" :use ((:instance prop=f2b-join-fn
-                                            (nbrs '())
-                                            (p (car (bn-join-witness (f2b w)
-                                                                     u)))
-                                            (s w)
-                                            (pubs (mget :pubs (cdr
-                                                               (bn-join-witness
-                                                                (f2b w) u))))
-                                            (subs (mget :subs (cdr
-                                                               (bn-join-witness
-                                                                (f2b w)
-                                                                u)))))))))
-   (:claim (s-fnp (join-fn (car (bn-join-witness (f2b w) u))
-                     (mget :pubs (cdr (bn-join-witness (f2b w) u)))
-                     (mget :subs (cdr (bn-join-witness (f2b w) u)))
-                     nil w)))
-   (:dv 2) (:rewrite b-bnfn) :s :top
-   (:dv 1) (:rewrite rel->fnfn) (:r 2) :top
-   (:claim (== u (f2b (join-fn (car (bn-join-witness (f2b w) u))
-                            (mget :pubs (cdr (bn-join-witness (f2b w) u)))
-                            (mget :subs (cdr (bn-join-witness (f2b w) u)))
-                            nil
-                            w))))
-   (:claim (rel-join-fn w (join-fn (car (bn-join-witness (f2b w) u))
-                          (mget :pubs (cdr (bn-join-witness (f2b w) u)))
-                          (mget :subs (cdr (bn-join-witness (f2b w) u)))
-                          nil
-                          w))
-           :hints (("Goal" :use ((:instance web3-v2-help52)))))
-   :s))
+;;    (:claim (== (f2b (join-fn (car (bn-join-witness (f2b w) u))
+;;                     (mget :pubs (cdr (bn-join-witness (f2b w) u)))
+;;                     (mget :subs (cdr (bn-join-witness (f2b w) u)))
+;;                     '()
+;;                     w))
+;;                (join-bn (car (bn-join-witness (f2b w) u))
+;;                         (mget :pubs (cdr (bn-join-witness (f2b w) u)))
+;;                         (mget :subs (cdr (bn-join-witness (f2b w) u)))
+;;                         (f2b w)))
+;;            :hints (("Goal" :use ((:instance prop=f2b-join-fn
+;;                                             (nbrs '())
+;;                                             (p (car (bn-join-witness (f2b w)
+;;                                                                      u)))
+;;                                             (s w)
+;;                                             (pubs (mget :pubs (cdr
+;;                                                                (bn-join-witness
+;;                                                                 (f2b w) u))))
+;;                                             (subs (mget :subs (cdr
+;;                                                                (bn-join-witness
+;;                                                                 (f2b w)
+;;                                                                 u)))))))))
+;;    (:claim (s-fnp (join-fn (car (bn-join-witness (f2b w) u))
+;;                      (mget :pubs (cdr (bn-join-witness (f2b w) u)))
+;;                      (mget :subs (cdr (bn-join-witness (f2b w) u)))
+;;                      nil w)))
+;;    (:dv 2) (:rewrite b-bnfn) :s :top
+;;    (:dv 1) (:rewrite rel->fnfn) (:r 2) :top
+;;    (:claim (== u (f2b (join-fn (car (bn-join-witness (f2b w) u))
+;;                             (mget :pubs (cdr (bn-join-witness (f2b w) u)))
+;;                             (mget :subs (cdr (bn-join-witness (f2b w) u)))
+;;                             nil
+;;                             w))))
+;;    (:claim (rel-join-fn w (join-fn (car (bn-join-witness (f2b w) u))
+;;                           (mget :pubs (cdr (bn-join-witness (f2b w) u)))
+;;                           (mget :subs (cdr (bn-join-witness (f2b w) u)))
+;;                           nil
+;;                           w))
+;;            :hints (("Goal" :use ((:instance web3-v2-help52)))))
+;;    :s))
 
 
-(property web3-v2-help61 (w :s-fn u :s-bn)
-  :check-contracts? nil
-  :h (^ (rel-leave-bn (f2b w) u)
-        (=> (mget (car (bn-join-witness u (f2b w))) w)
-            (== (fn-pending-mssgs (leave-fn (car (bn-join-witness u (f2b w))) w))
-                (fn-pending-mssgs w))))
-  (fn-join-witness (leave-fn (car (bn-join-witness u (f2b w)))
-                             w)
-                   w)
-  :instructions
-  (:pro
-   (:rewrite fn-join-witness) :s :s
-   (:claim (== (rel-leave-bn (f2b w) u)
-               (and (bn-join-witness u (f2b w))
-                    (mget (car (bn-join-witness u (f2b w)))
-                          (f2b w))
-                    (equal u
-                           (leave-bn (car (bn-join-witness u (f2b w)))
-                                     (f2b w)))))
-           :hints (("Goal" :in-theory (enable rel-leave-bn))))
-   (:claim (and (bn-join-witness u (f2b w))
-                (mget (car (bn-join-witness u (f2b w)))
-                      (f2b w))
-                (equal u
-                       (leave-bn (car (bn-join-witness u (f2b w)))
-                                 (f2b w)))))
+;; (property web3-v2-help61 (w :s-fn u :s-bn)
+;;   :check-contracts? nil
+;;   :h (^ (rel-leave-bn (f2b w) u)
+;;         (=> (mget (car (bn-join-witness u (f2b w))) w)
+;;             (== (fn-pending-mssgs (leave-fn (car (bn-join-witness u (f2b w))) w))
+;;                 (fn-pending-mssgs w))))
+;;   (fn-join-witness (leave-fn (car (bn-join-witness u (f2b w)))
+;;                              w)
+;;                    w)
+;;   :instructions
+;;   (:pro
+;;    (:rewrite fn-join-witness) :s :s
+;;    (:claim (== (rel-leave-bn (f2b w) u)
+;;                (and (bn-join-witness u (f2b w))
+;;                     (mget (car (bn-join-witness u (f2b w)))
+;;                           (f2b w))
+;;                     (equal u
+;;                            (leave-bn (car (bn-join-witness u (f2b w)))
+;;                                      (f2b w)))))
+;;            :hints (("Goal" :in-theory (enable rel-leave-bn))))
+;;    (:claim (and (bn-join-witness u (f2b w))
+;;                 (mget (car (bn-join-witness u (f2b w)))
+;;                       (f2b w))
+;;                 (equal u
+;;                        (leave-bn (car (bn-join-witness u (f2b w)))
+;;                                  (f2b w)))))
    
-   (= (f2b (leave-fn (car (bn-join-witness u (f2b w))) w))
-      (leave-bn (car (bn-join-witness u (f2b w))) (f2b w))
-      :hints (("Goal" :use ((:instance prop=f2b-leave-fn
-                                       (s w)
-                                       (p (car (bn-join-witness
-                                                u (f2b w)))))))))
-   :prove))
+;;    (= (f2b (leave-fn (car (bn-join-witness u (f2b w))) w))
+;;       (leave-bn (car (bn-join-witness u (f2b w))) (f2b w))
+;;       :hints (("Goal" :use ((:instance prop=f2b-leave-fn
+;;                                        (s w)
+;;                                        (p (car (bn-join-witness
+;;                                                 u (f2b w)))))))))
+;;    :prove))
 
 
-(property web3-v2-help62 (w :s-fn u :s-bn)
-  :check-contracts? nil
-  :h (^ (rel-leave-bn (f2b w) u)
-        (=> (mget (car (bn-join-witness u (f2b w))) w)
-            (== (fn-pending-mssgs (leave-fn (car (bn-join-witness u (f2b w))) w))
-                (fn-pending-mssgs w)))
-        (== u (f2b (leave-fn (car (bn-join-witness u (f2b w))) w))))
-  (rel-leave-fn w (leave-fn (car (bn-join-witness u (f2b w))) w))
-  :instructions
-  (:pro
-   (:claim (mget (car (bn-join-witness u (f2b w))) (f2b w))
-           :hints (("Goal" :in-theory (enable rel-leave-bn))))
-   :r
-   (:claim (fn-join-witness (leave-fn (car (bn-join-witness
-                                            u (f2b w)))
-                                      w)
-                            w))
-   (:claim (== (car (fn-join-witness (leave-fn (car (bn-join-witness u (f2b w)))
-                                               w)
-                                     w))
-               (car (bn-join-witness u (f2b w)))))
-   :s
-   (:claim (bn-join-witness u (f2b w))) :s :bash))
+;; (property web3-v2-help62 (w :s-fn u :s-bn)
+;;   :check-contracts? nil
+;;   :h (^ (rel-leave-bn (f2b w) u)
+;;         (=> (mget (car (bn-join-witness u (f2b w))) w)
+;;             (== (fn-pending-mssgs (leave-fn (car (bn-join-witness u (f2b w))) w))
+;;                 (fn-pending-mssgs w)))
+;;         (== u (f2b (leave-fn (car (bn-join-witness u (f2b w))) w))))
+;;   (rel-leave-fn w (leave-fn (car (bn-join-witness u (f2b w))) w))
+;;   :instructions
+;;   (:pro
+;;    (:claim (mget (car (bn-join-witness u (f2b w))) (f2b w))
+;;            :hints (("Goal" :in-theory (enable rel-leave-bn))))
+;;    :r
+;;    (:claim (fn-join-witness (leave-fn (car (bn-join-witness
+;;                                             u (f2b w)))
+;;                                       w)
+;;                             w))
+;;    (:claim (== (car (fn-join-witness (leave-fn (car (bn-join-witness u (f2b w)))
+;;                                                w)
+;;                                      w))
+;;                (car (bn-join-witness u (f2b w)))))
+;;    :s
+;;    (:claim (bn-join-witness u (f2b w))) :s :bash))
   
 
-(property web3-v2-help6 (w :s-fn u :s-bn)
-  :h (^ (not (rel-skip-bn (f2b w) u))
-        (not (rel-broadcast-bn (f2b w) u))
-        (not (rel-subscribe-bn (f2b w) u))
-        (not (rel-unsubscribe-bn (f2b w) u))
-        (not (rel-join-bn (f2b w) u))
-        (rel-leave-bn (f2b w) u)
+;; (property web3-v2-help6 (w :s-fn u :s-bn)
+;;   :h (^ (not (rel-skip-bn (f2b w) u))
+;;         (not (rel-broadcast-bn (f2b w) u))
+;;         (not (rel-subscribe-bn (f2b w) u))
+;;         (not (rel-unsubscribe-bn (f2b w) u))
+;;         (not (rel-join-bn (f2b w) u))
+;;         (rel-leave-bn (f2b w) u)
 
-        (=> (mget (car (bn-join-witness u (f2b w))) w)
-            (== (fn-pending-mssgs (leave-fn (car (bn-join-witness u (f2b w))) w))
-                (fn-pending-mssgs w))))
-  (^ (rel-> w
-            (exists-v2 u w))
-     (rel-b u (exists-v2 u w)))
-  :instructions
-  (:pro
-   (:claim (^ (bn-join-witness u (f2b w))
-              (mget (car (bn-join-witness u (f2b w))) (f2b w))
-              (== u (leave-bn (car (bn-join-witness u (f2b w)))
-                              (f2b w))))
-           :hints (("Goal" :in-theory (enable rel-leave-bn))))
-   (:claim (== (exists-v2 u w)
-               (leave-fn (car (bn-join-witness u (f2b w))) w)))
-   (:claim (mget (car (bn-join-witness u (f2b w))) w))
-   (:equiv  (exists-v2 u w)
-            (leave-fn (car (bn-join-witness u (f2b w))) w))
+;;         (=> (mget (car (bn-join-witness u (f2b w))) w)
+;;             (== (fn-pending-mssgs (leave-fn (car (bn-join-witness u (f2b w))) w))
+;;                 (fn-pending-mssgs w))))
+;;   (^ (rel-> w
+;;             (exists-v2 u w))
+;;      (rel-b u (exists-v2 u w)))
+;;   :instructions
+;;   (:pro
+;;    (:claim (^ (bn-join-witness u (f2b w))
+;;               (mget (car (bn-join-witness u (f2b w))) (f2b w))
+;;               (== u (leave-bn (car (bn-join-witness u (f2b w)))
+;;                               (f2b w))))
+;;            :hints (("Goal" :in-theory (enable rel-leave-bn))))
+;;    (:claim (== (exists-v2 u w)
+;;                (leave-fn (car (bn-join-witness u (f2b w))) w)))
+;;    (:claim (mget (car (bn-join-witness u (f2b w))) w))
+;;    (:equiv  (exists-v2 u w)
+;;             (leave-fn (car (bn-join-witness u (f2b w))) w))
 
-   (:claim (== (f2b (leave-fn (car (bn-join-witness u (f2b w))) w))
-               (leave-bn (car (bn-join-witness u (f2b w))) (f2b w)))
-           :hints (("Goal" :use ((:instance prop=f2b-leave-fn
-                                            (s w)
-                                            (p (car (bn-join-witness
-                                                     u (f2b w)))))))))
-   (:dv 2) (:rewrite b-bnfn) :s :top
-   (:dv 1) (:rewrite rel->fnfn) (:r 2) :top
-   (:claim (fn-join-witness (leave-fn
-                             (car (bn-join-witness u (f2b w)))
-                             w)
-                            w)
-           :hints (("Goal" :use ((:instance web3-v2-help61)))))
-   (:claim (rel-leave-fn w
-                          (leave-fn (car (bn-join-witness u (f2b w)))
-                                    w))
-           :hints (("Goal" :use ((:instance web3-v2-help62)))))
-   :s))
+;;    (:claim (== (f2b (leave-fn (car (bn-join-witness u (f2b w))) w))
+;;                (leave-bn (car (bn-join-witness u (f2b w))) (f2b w)))
+;;            :hints (("Goal" :use ((:instance prop=f2b-leave-fn
+;;                                             (s w)
+;;                                             (p (car (bn-join-witness
+;;                                                      u (f2b w)))))))))
+;;    (:dv 2) (:rewrite b-bnfn) :s :top
+;;    (:dv 1) (:rewrite rel->fnfn) (:r 2) :top
+;;    (:claim (fn-join-witness (leave-fn
+;;                              (car (bn-join-witness u (f2b w)))
+;;                              w)
+;;                             w)
+;;            :hints (("Goal" :use ((:instance web3-v2-help61)))))
+;;    (:claim (rel-leave-fn w
+;;                           (leave-fn (car (bn-join-witness u (f2b w)))
+;;                                     w))
+;;            :hints (("Goal" :use ((:instance web3-v2-help62)))))
+;;    :s))
 
-;; invariants needed here.
-(propertyd web3-v2-help7 (s u :s-bn w :s-fn)
-  :check-contracts? nil
-  :h (^ (rel-B s w)
-        (rel-> s u)
-        (! (rel-skip-bn (f2b w) u))
-        (rel-broadcast-bn (f2b w) u)
-        (f2b-refinement-conditions w
-                                   (br-mssg-witness (f2b w) u)
-                                   (car (bn-join-witness u (f2b w)))))
+;; ;; invariants needed here.
+;; (propertyd web3-v2-help7 (s u :s-bn w :s-fn)
+;;   :check-contracts? nil
+;;   :h (^ (rel-B s w)
+;;         (rel-> s u)
+;;         (! (rel-skip-bn (f2b w) u))
+;;         (rel-broadcast-bn (f2b w) u)
+;;         (f2b-refinement-conditions w
+;;                                    (br-mssg-witness (f2b w) u)
+;;                                    (car (bn-join-witness u (f2b w)))))
 
-  (v (^ (rel-> w (exists-v2 u w))
-        (rel-B u (exists-v2 u w)))
-     (^ (rel-> w (exists-v2 u w))
-        (rel-B s (exists-v2 u w))
-        (< (erankl (exists-v2 u w) u)
-           (erankl w u))))
-  :instructions
-  (:pro
-   (:claim (== s (f2b w)))
-   (:claim (rel-step-bn s u))
+;;   (v (^ (rel-> w (exists-v2 u w))
+;;         (rel-B u (exists-v2 u w)))
+;;      (^ (rel-> w (exists-v2 u w))
+;;         (rel-B s (exists-v2 u w))
+;;         (< (erankl (exists-v2 u w) u)
+;;            (erankl w u))))
+;;   :instructions
+;;   (:pro
+;;    (:claim (== s (f2b w)))
+;;    (:claim (rel-step-bn s u))
 
-   (:claim (^ (br-mssg-witness (f2b w) u)
-              (broadcast-bn-pre (br-mssg-witness (f2b w) u) (f2b w))
-              (== u (broadcast (br-mssg-witness (f2b w) u) (f2b w))))
-           :hints (("Goal" :in-theory (enable rel-broadcast-bn))))
+;;    (:claim (^ (br-mssg-witness (f2b w) u)
+;;               (broadcast-bn-pre (br-mssg-witness (f2b w) u) (f2b w))
+;;               (== u (broadcast (br-mssg-witness (f2b w) u) (f2b w))))
+;;            :hints (("Goal" :in-theory (enable rel-broadcast-bn))))
    
-   (:claim (^ (new-bn-mssgp (br-mssg-witness (f2b w) u) (f2b w))
-              (mget (mget :or (br-mssg-witness (f2b w) u)) (f2b w))
-              (in (mget :tp (br-mssg-witness (f2b w) u))
-                  (mget :pubs (mget (mget :or (br-mssg-witness
-                                               (f2b w) u))
-                                    (f2b w))))))
-   (:claim (^ (mget (mget :or (br-mssg-witness (f2b w) u)) w)
-              (in (mget :tp (br-mssg-witness (f2b w) u))
-                  (mget :pubs (mget (mget :or (br-mssg-witness
-                                               (f2b w) u))
-                                    w))))
-           :hints (("Goal" :use ((:instance prop=f2b-produce-hyps
-                                            (s w)
-                                            (m (br-mssg-witness (f2b w) u)))))))
+;;    (:claim (^ (new-bn-mssgp (br-mssg-witness (f2b w) u) (f2b w))
+;;               (mget (mget :or (br-mssg-witness (f2b w) u)) (f2b w))
+;;               (in (mget :tp (br-mssg-witness (f2b w) u))
+;;                   (mget :pubs (mget (mget :or (br-mssg-witness
+;;                                                (f2b w) u))
+;;                                     (f2b w))))))
+;;    (:claim (^ (mget (mget :or (br-mssg-witness (f2b w) u)) w)
+;;               (in (mget :tp (br-mssg-witness (f2b w) u))
+;;                   (mget :pubs (mget (mget :or (br-mssg-witness
+;;                                                (f2b w) u))
+;;                                     w))))
+;;            :hints (("Goal" :use ((:instance prop=f2b-produce-hyps
+;;                                             (s w)
+;;                                             (m (br-mssg-witness (f2b w) u)))))))
    
-   (:casesplit (in (br-mssg-witness (f2b w) u) (fn-pending-mssgs w)))
-   (:claim (^ (mget (find-forwarder w (br-mssg-witness (f2b w) u)) w)
-              (in (br-mssg-witness (f2b w) u)
-                  (mget :pending (mget (find-forwarder w (br-mssg-witness
-                                                          (f2b w) u))
-                                       w))))
-           :hints (("Goal" :use ((:instance find-forwarder-contract
-                                            (s w)
-                                            (m (br-mssg-witness (f2b w)
-                                                                u)))))))
+;;    (:casesplit (in (br-mssg-witness (f2b w) u) (fn-pending-mssgs w)))
+;;    (:claim (^ (mget (find-forwarder w (br-mssg-witness (f2b w) u)) w)
+;;               (in (br-mssg-witness (f2b w) u)
+;;                   (mget :pending (mget (find-forwarder w (br-mssg-witness
+;;                                                           (f2b w) u))
+;;                                        w))))
+;;            :hints (("Goal" :use ((:instance find-forwarder-contract
+;;                                             (s w)
+;;                                             (m (br-mssg-witness (f2b w)
+;;                                                                 u)))))))
    
-   (:claim (v (== (fn-pending-mssgs (forward-fn
-                                     (find-forwarder w (br-mssg-witness
-                                                        (f2b w) u))
-                                     (br-mssg-witness (f2b w) u) w))
-                  (remove-equal (br-mssg-witness (f2b w) u) (fn-pending-mssgs w)))
-              (== (fn-pending-mssgs (forward-fn
-                                     (find-forwarder w (br-mssg-witness
-                                                        (f2b w) u))
-                                     (br-mssg-witness (f2b w) u) w))
-                  (fn-pending-mssgs w)))
-           :hints (("Goal" :use ((:instance prop=fn-pending-mssgs-forward-fn
-                                            (s w)
-                                            (m (br-mssg-witness (f2b w) u))
-                                            (p (find-forwarder w
-                                                               (br-mssg-witness
-                                                                (f2b w) u))))))))
+;;    (:claim (v (== (fn-pending-mssgs (forward-fn
+;;                                      (find-forwarder w (br-mssg-witness
+;;                                                         (f2b w) u))
+;;                                      (br-mssg-witness (f2b w) u) w))
+;;                   (remove-equal (br-mssg-witness (f2b w) u) (fn-pending-mssgs w)))
+;;               (== (fn-pending-mssgs (forward-fn
+;;                                      (find-forwarder w (br-mssg-witness
+;;                                                         (f2b w) u))
+;;                                      (br-mssg-witness (f2b w) u) w))
+;;                   (fn-pending-mssgs w)))
+;;            :hints (("Goal" :use ((:instance prop=fn-pending-mssgs-forward-fn
+;;                                             (s w)
+;;                                             (m (br-mssg-witness (f2b w) u))
+;;                                             (p (find-forwarder w
+;;                                                                (br-mssg-witness
+;;                                                                 (f2b w) u))))))))
 
-   (:casesplit (!= (fn-pending-mssgs
-                    (forward-fn
-                     (find-forwarder w
-                                     (br-mssg-witness (f2b w) u))
-                                      (br-mssg-witness (f2b w) u) w))
-                   (fn-pending-mssgs w)))
-   (:prove :hints (("Goal" :in-theory (enable rel-forward-fn1))))
+;;    (:casesplit (!= (fn-pending-mssgs
+;;                     (forward-fn
+;;                      (find-forwarder w
+;;                                      (br-mssg-witness (f2b w) u))
+;;                                       (br-mssg-witness (f2b w) u) w))
+;;                    (fn-pending-mssgs w)))
+;;    (:prove :hints (("Goal" :in-theory (enable rel-forward-fn1))))
 
 
-   (:claim (^ (rel-B (f2b w)
-                     (forward-fn (find-forwarder w (br-mssg-witness (f2b w) u))
-                                 (br-mssg-witness (f2b w) u) w))
-              (< (rankl (br-mssg-witness (f2b w) u)
-                        (forward-fn (find-forwarder w (br-mssg-witness
-                                                       (f2b w) u))
-                                    (br-mssg-witness (f2b w) u) w))
-                 (rankl (br-mssg-witness (f2b w) u) w)))
-           :hints (("Goal" :in-theory (enable rel-forward-fn2)
-                    :use ((:instance web3-v2-help4)))))
-   (= (exists-v2 u w)
-      (forward-fn (find-forwarder w (br-mssg-witness (f2b w) u))
-                  (br-mssg-witness (f2b w) u)
-                  w))
+;;    (:claim (^ (rel-B (f2b w)
+;;                      (forward-fn (find-forwarder w (br-mssg-witness (f2b w) u))
+;;                                  (br-mssg-witness (f2b w) u) w))
+;;               (< (rankl (br-mssg-witness (f2b w) u)
+;;                         (forward-fn (find-forwarder w (br-mssg-witness
+;;                                                        (f2b w) u))
+;;                                     (br-mssg-witness (f2b w) u) w))
+;;                  (rankl (br-mssg-witness (f2b w) u) w)))
+;;            :hints (("Goal" :in-theory (enable rel-forward-fn2)
+;;                     :use ((:instance web3-v2-help4)))))
+;;    (= (exists-v2 u w)
+;;       (forward-fn (find-forwarder w (br-mssg-witness (f2b w) u))
+;;                   (br-mssg-witness (f2b w) u)
+;;                   w))
 
-   :s
+;;    :s
 
-   (:claim (equal (f2b (forward-fn (find-forwarder w (br-mssg-witness s u))
-                             (br-mssg-witness s u)
-                             w))
-                  s))
-   :s
+;;    (:claim (equal (f2b (forward-fn (find-forwarder w (br-mssg-witness s u))
+;;                              (br-mssg-witness s u)
+;;                              w))
+;;                   s))
+;;    :s
 
-   (:claim (rel-forward-fn2 w
-                            (forward-fn (find-forwarder w (br-mssg-witness (f2b w) u))
-                                        (br-mssg-witness (f2b w) u)
-                                        w))
-           :hints (("Goal" :in-theory (enable rel-forward-fn2)
-                    :use ((:instance prop=rel-forwardm-help-fn2
-                                     (s w)
-                                     (u (forward-fn (find-forwarder w (br-mssg-witness (f2b w) u))
-                                                    (br-mssg-witness (f2b w) u)
-                                                    w))
-                                     (ms (fn-pending-mssgs s)))))))
-   (= s (f2b w))
-   (:claim (s-bnp u)) :s
-   (= (erankl w u)
-      (rankl (br-mssg-witness (f2b w) u) w))
-   (= (erankl (forward-fn (find-forwarder w (br-mssg-witness s u))
-                           (br-mssg-witness s u)
-                           w)
-              u)
-      (rankl (br-mssg-witness (f2b w) u)
-              (forward-fn (find-forwarder w (br-mssg-witness (f2b w) u))
-                          (br-mssg-witness (f2b w) u)
-                          w)))
-   :s
+;;    (:claim (rel-forward-fn2 w
+;;                             (forward-fn (find-forwarder w (br-mssg-witness (f2b w) u))
+;;                                         (br-mssg-witness (f2b w) u)
+;;                                         w))
+;;            :hints (("Goal" :in-theory (enable rel-forward-fn2)
+;;                     :use ((:instance prop=rel-forwardm-help-fn2
+;;                                      (s w)
+;;                                      (u (forward-fn (find-forwarder w (br-mssg-witness (f2b w) u))
+;;                                                     (br-mssg-witness (f2b w) u)
+;;                                                     w))
+;;                                      (ms (fn-pending-mssgs s)))))))
+;;    (= s (f2b w))
+;;    (:claim (s-bnp u)) :s
+;;    (= (erankl w u)
+;;       (rankl (br-mssg-witness (f2b w) u) w))
+;;    (= (erankl (forward-fn (find-forwarder w (br-mssg-witness s u))
+;;                            (br-mssg-witness s u)
+;;                            w)
+;;               u)
+;;       (rankl (br-mssg-witness (f2b w) u)
+;;               (forward-fn (find-forwarder w (br-mssg-witness (f2b w) u))
+;;                           (br-mssg-witness (f2b w) u)
+;;                           w)))
+;;    :s
 
-   (:claim (new-fn-mssgp (br-mssg-witness (f2b w) u) w))
-   (:claim (^ (rel-B (f2b w)
-                     (produce-fn (br-mssg-witness (f2b w) u) w))
-              (< (rankl (br-mssg-witness (f2b w) u) (produce-fn (br-mssg-witness (f2b w) u) w))
-                 (rankl (br-mssg-witness (f2b w) u) w)))
-           :hints (("Goal" :in-theory (enable rel-produce-fn)
-                    :use ((:instance web3-v2-help3)))))
-   (= s (f2b w))
-   (= (exists-v2 u w)
-      (produce-fn (br-mssg-witness (f2b w) u)
-                  w))
+;;    (:claim (new-fn-mssgp (br-mssg-witness (f2b w) u) w))
+;;    (:claim (^ (rel-B (f2b w)
+;;                      (produce-fn (br-mssg-witness (f2b w) u) w))
+;;               (< (rankl (br-mssg-witness (f2b w) u) (produce-fn (br-mssg-witness (f2b w) u) w))
+;;                  (rankl (br-mssg-witness (f2b w) u) w)))
+;;            :hints (("Goal" :in-theory (enable rel-produce-fn)
+;;                     :use ((:instance web3-v2-help3)))))
+;;    (= s (f2b w))
+;;    (= (exists-v2 u w)
+;;       (produce-fn (br-mssg-witness (f2b w) u)
+;;                   w))
    
-   (:claim (rel-produce-fn w (produce-fn (br-mssg-witness (f2b w) u) w))
-           :hints (("Goal" :in-theory (enable rel-produce-fn))))
-   :s
-   (= (f2b (produce-fn (br-mssg-witness s u) w)) (f2b w))
-   :s
-   (= s (f2b w))
-   :s
-   (= (erankl (produce-fn (br-mssg-witness s u) w)
-              u)
-      (rankl (br-mssg-witness (f2b w) u)
-              (produce-fn (br-mssg-witness (f2b w) u)
-                          w)))
-   (= (erankl w u)
-      (rankl (br-mssg-witness (f2b w) u) w))
-   :s))
+;;    (:claim (rel-produce-fn w (produce-fn (br-mssg-witness (f2b w) u) w))
+;;            :hints (("Goal" :in-theory (enable rel-produce-fn))))
+;;    :s
+;;    (= (f2b (produce-fn (br-mssg-witness s u) w)) (f2b w))
+;;    :s
+;;    (= s (f2b w))
+;;    :s
+;;    (= (erankl (produce-fn (br-mssg-witness s u) w)
+;;               u)
+;;       (rankl (br-mssg-witness (f2b w) u)
+;;               (produce-fn (br-mssg-witness (f2b w) u)
+;;                           w)))
+;;    (= (erankl w u)
+;;       (rankl (br-mssg-witness (f2b w) u) w))
+;;    :s))
 
 
-(in-theory (disable br-mssg-witness bn-join-witness erankl))
-(in-theory (disable rel-> exists-v2 exists-v1
-                    borfp s-fnp s-bnp join-fn join-bn))
+;; (in-theory (disable br-mssg-witness bn-join-witness erankl))
+;; (in-theory (disable rel-> exists-v2 exists-v1
+;;                     borfp s-fnp s-bnp join-fn join-bn))
 
-(propertyd web3-2 (s u :s-bn w :s-fn)
-  :check-contracts? nil
-  :h (^ (rel-B s w)
-        (rel-> s u)
-        (f2b-refinement-conditions w
-                                   (br-mssg-witness (f2b w) u)
-                                   (car (bn-join-witness u (f2b w)))))
+;; (propertyd web3-2 (s u :s-bn w :s-fn)
+;;   :check-contracts? nil
+;;   :h (^ (rel-B s w)
+;;         (rel-> s u)
+;;         (f2b-refinement-conditions w
+;;                                    (br-mssg-witness (f2b w) u)
+;;                                    (car (bn-join-witness u (f2b w)))))
 
-  (v (^ (rel-> w (exists-v2 u w))
-        (rel-B u (exists-v2 u w)))
-     (^ (rel-> w (exists-v2 u w))
-        (rel-B s (exists-v2 u w))
-        (< (erankl (exists-v2 u w) u)
-           (erankl w u))))
-  :instructions
-  (:pro
-   (:claim (== s (f2b w)))
-   (:claim (rel-step-bn s u))
+;;   (v (^ (rel-> w (exists-v2 u w))
+;;         (rel-B u (exists-v2 u w)))
+;;      (^ (rel-> w (exists-v2 u w))
+;;         (rel-B s (exists-v2 u w))
+;;         (< (erankl (exists-v2 u w) u)
+;;            (erankl w u))))
+;;   :instructions
+;;   (:pro
+;;    (:claim (== s (f2b w)))
+;;    (:claim (rel-step-bn s u))
 
-   (:casesplit (rel-skip-bn (f2b w) u))
-   (:prove :hints (("Goal" :use ((:instance web3-uBv2-help1)))))
+;;    (:casesplit (rel-skip-bn (f2b w) u))
+;;    (:prove :hints (("Goal" :use ((:instance web3-uBv2-help1)))))
 
-   (:casesplit (rel-broadcast-bn (f2b w) u))
-   (:prove :hints (("Goal" :use ((:instance web3-v2-help7)))))
+;;    (:casesplit (rel-broadcast-bn (f2b w) u))
+;;    (:prove :hints (("Goal" :use ((:instance web3-v2-help7)))))
    
-   (:casesplit (rel-subscribe-bn s u))                    
-   (:claim (^ (bn-topics-witness s u)
-              (mget (car (bn-topics-witness s u)) s)
-              (== u (subscribe-bn (car (bn-topics-witness s u))
-                                  (cdr (bn-topics-witness s u))
-                                  s)))
-           :hints (("Goal" :in-theory (enable rel-subscribe-bn))))
-   (:claim (rel-> w
-                  (subscribe-fn (car (bn-topics-witness s u))
-                                (cdr (bn-topics-witness s u)) w))
-           :hints (("Goal" :in-theory (enable rel->
-                                              rel-step-fn
-                                              rel-subscribe-fn))))
-   :prove
+;;    (:casesplit (rel-subscribe-bn s u))                    
+;;    (:claim (^ (bn-topics-witness s u)
+;;               (mget (car (bn-topics-witness s u)) s)
+;;               (== u (subscribe-bn (car (bn-topics-witness s u))
+;;                                   (cdr (bn-topics-witness s u))
+;;                                   s)))
+;;            :hints (("Goal" :in-theory (enable rel-subscribe-bn))))
+;;    (:claim (rel-> w
+;;                   (subscribe-fn (car (bn-topics-witness s u))
+;;                                 (cdr (bn-topics-witness s u)) w))
+;;            :hints (("Goal" :in-theory (enable rel->
+;;                                               rel-step-fn
+;;                                               rel-subscribe-fn))))
+;;    :prove
 
-   (:casesplit (rel-unsubscribe-bn s u))                    
-   (:claim (^ (bn-topics-witness u s)
-              (mget (car (bn-topics-witness u s)) s)
-              (== u (unsubscribe-bn (car (bn-topics-witness u s))
-                                    (cdr (bn-topics-witness u s))
-                                    s)))
-           :hints (("Goal" :in-theory (enable rel-unsubscribe-bn)))) 
-   (:claim (rel-> w
-                  (unsubscribe-fn (car (bn-topics-witness u s))
-                                  (cdr (bn-topics-witness u s))
-                                  w))
-           :hints (("Goal" :in-theory (enable rel->
-                                              rel-step-fn
-                                              rel-unsubscribe-fn))))
-   :prove
+;;    (:casesplit (rel-unsubscribe-bn s u))                    
+;;    (:claim (^ (bn-topics-witness u s)
+;;               (mget (car (bn-topics-witness u s)) s)
+;;               (== u (unsubscribe-bn (car (bn-topics-witness u s))
+;;                                     (cdr (bn-topics-witness u s))
+;;                                     s)))
+;;            :hints (("Goal" :in-theory (enable rel-unsubscribe-bn)))) 
+;;    (:claim (rel-> w
+;;                   (unsubscribe-fn (car (bn-topics-witness u s))
+;;                                   (cdr (bn-topics-witness u s))
+;;                                   w))
+;;            :hints (("Goal" :in-theory (enable rel->
+;;                                               rel-step-fn
+;;                                               rel-unsubscribe-fn))))
+;;    :prove
 
-   (:casesplit (rel-join-bn s u))
-   (:prove :hints (("Goal" :use ((:instance web3-v2-help5)))))
+;;    (:casesplit (rel-join-bn s u))
+;;    (:prove :hints (("Goal" :use ((:instance web3-v2-help5)))))
 
-   (:claim (rel-leave-bn s u))
-   (:prove :hints (("Goal" :use ((:instance web3-v2-help6)))))))
-
-
-;;===========================================================================
-
-(propertyd web3-help1 (s w u :s-fn)
-  :check-contracts? nil
-  :h (^ (rel-B (f2b s) w)
-        (rel-> (f2b s) (f2b u))
-        (f2b-refinement-conditions w
-                                   (br-mssg-witness (f2b s) (f2b u))
-                                   (car (bn-join-witness (f2b u) (f2b s)))))
-  (v (^ (rel-> w (exists-v2 (f2b u) w))
-        (rel-B (f2b u) (exists-v2 (f2b u) w)))
-     (^ (rel-> w (exists-v2 (f2b u) w))
-        (rel-B (f2b s) (exists-v2 (f2b u) w))
-        (< (erankl (exists-v2 (f2b u) w) (f2b u))
-           (erankl w (f2b u)))))
-  :instructions
-  (:pro
-   (:claim (== (f2b w) (f2b s)))
-   (:demote 4 5 6 7 8 9)
-   (:equiv (f2b s) (f2b w))
-   :pro :r :s))
+;;    (:claim (rel-leave-bn s u))
+;;    (:prove :hints (("Goal" :use ((:instance web3-v2-help6)))))))
 
 
+;; ;;===========================================================================
 
-(property web3-3 (s w u :s-fn)
-  :check-contracts? nil
+;; (propertyd web3-help1 (s w u :s-fn)
+;;   :check-contracts? nil
+;;   :h (^ (rel-B (f2b s) w)
+;;         (rel-> (f2b s) (f2b u))
+;;         (f2b-refinement-conditions w
+;;                                    (br-mssg-witness (f2b s) (f2b u))
+;;                                    (car (bn-join-witness (f2b u) (f2b s)))))
+;;   (v (^ (rel-> w (exists-v2 (f2b u) w))
+;;         (rel-B (f2b u) (exists-v2 (f2b u) w)))
+;;      (^ (rel-> w (exists-v2 (f2b u) w))
+;;         (rel-B (f2b s) (exists-v2 (f2b u) w))
+;;         (< (erankl (exists-v2 (f2b u) w) (f2b u))
+;;            (erankl w (f2b u)))))
+;;   :instructions
+;;   (:pro
+;;    (:claim (== (f2b w) (f2b s)))
+;;    (:demote 4 5 6 7 8 9)
+;;    (:equiv (f2b s) (f2b w))
+;;    :pro :r :s))
 
-  :h (^ (rel-B s w)
-        (rel-> s u)
+
+
+;; (property web3-3 (s w u :s-fn)
+;;   :check-contracts? nil
+
+;;   :h (^ (rel-B s w)
+;;         (rel-> s u)
       
-        (f2b-refinement-conditions s
-                                   (br-mssg-witness (f2b s) (f2b u))
-                                   (car (bn-join-witness (f2b u) (f2b s))))
-        (f2b-refinement-conditions w
-                                   (br-mssg-witness (f2b s) (f2b u))
-                                   (car (bn-join-witness (f2b u) (f2b s)))))
+;;         (f2b-refinement-conditions s
+;;                                    (br-mssg-witness (f2b s) (f2b u))
+;;                                    (car (bn-join-witness (f2b u) (f2b s))))
+;;         (f2b-refinement-conditions w
+;;                                    (br-mssg-witness (f2b s) (f2b u))
+;;                                    (car (bn-join-witness (f2b u) (f2b s)))))
   
-  (v (^ (rel-> w (exists-v2 (exists-v1 s u) w))
-        (rel-B u (exists-v2 (exists-v1 s u) w)))
+;;   (v (^ (rel-> w (exists-v2 (exists-v1 s u) w))
+;;         (rel-B u (exists-v2 (exists-v1 s u) w)))
      
-     (^ (rel-> w (exists-v2 (exists-v1 s u) w))
-        (rel-B s (exists-v2 (exists-v1 s u) w))
-        (< (erankl (exists-v2 (exists-v1 s u) w) u)
-           (erankl w u))))
-  :instructions
-  (:pro
-   (:claim (rel-B s (f2b s))
-           :hints (("Goal" :use ((:instance b-maps-f2b)))))
-   (:claim (s-bnp (f2b s)))
-   (:claim (^ (rel-> (f2b s)
-                     (exists-v1 s u))
-              (rel-B u
-                     (exists-v1 s u)))
-           :hints (("Goal" :use ((:instance web3-1
-                                            (w (f2b s)))))))
-   (:claim (== (exists-v1 s u) (f2b u))
-           :hints (("Goal" :use ((:instance b-fnbn
-                                            (s u)
-                                            (w (exists-v1 s u)))))))
-   (:demote 18 19)
-   (:equiv (exists-v1 s u)
-           (f2b u))
-   :pro
+;;      (^ (rel-> w (exists-v2 (exists-v1 s u) w))
+;;         (rel-B s (exists-v2 (exists-v1 s u) w))
+;;         (< (erankl (exists-v2 (exists-v1 s u) w) u)
+;;            (erankl w u))))
+;;   :instructions
+;;   (:pro
+;;    (:claim (rel-B s (f2b s))
+;;            :hints (("Goal" :use ((:instance b-maps-f2b)))))
+;;    (:claim (s-bnp (f2b s)))
+;;    (:claim (^ (rel-> (f2b s)
+;;                      (exists-v1 s u))
+;;               (rel-B u
+;;                      (exists-v1 s u)))
+;;            :hints (("Goal" :use ((:instance web3-1
+;;                                             (w (f2b s)))))))
+;;    (:claim (== (exists-v1 s u) (f2b u))
+;;            :hints (("Goal" :use ((:instance b-fnbn
+;;                                             (s u)
+;;                                             (w (exists-v1 s u)))))))
+;;    (:demote 18 19)
+;;    (:equiv (exists-v1 s u)
+;;            (f2b u))
+;;    :pro
    
-   (:claim (borfp s)
-           :hints (("Goal" :use ((:instance fn->borf (x s))))))
-   (:claim (borfp (f2b s))
-           :hints (("Goal" :use ((:instance bn->borf (x (f2b s)))))))
-   (:claim (rel-B (f2b s) s)
-           :hints (("Goal" :use ((:instance rel-B-symmetric
-                                            (x s) (y (f2b s)))))))
-   (:claim (borfp w)
-           :hints (("Goal" :use ((:instance fn->borf (x w))))))
-   (:claim (rel-B (f2b s) w)
-           :hints (("Goal" :use ((:instance rel-B-transitive
-                                            (x (f2b s))
-                                            (y s) (z w))))))
+;;    (:claim (borfp s)
+;;            :hints (("Goal" :use ((:instance fn->borf (x s))))))
+;;    (:claim (borfp (f2b s))
+;;            :hints (("Goal" :use ((:instance bn->borf (x (f2b s)))))))
+;;    (:claim (rel-B (f2b s) s)
+;;            :hints (("Goal" :use ((:instance rel-B-symmetric
+;;                                             (x s) (y (f2b s)))))))
+;;    (:claim (borfp w)
+;;            :hints (("Goal" :use ((:instance fn->borf (x w))))))
+;;    (:claim (rel-B (f2b s) w)
+;;            :hints (("Goal" :use ((:instance rel-B-transitive
+;;                                             (x (f2b s))
+;;                                             (y s) (z w))))))
    
-   (:claim (s-bnp (exists-v1 s u)))
+;;    (:claim (s-bnp (exists-v1 s u)))
    
-   (:claim (rel-b s (f2b s))
-           :hints (("Goal" :use ((:instance rel-B-symmetric
-                                            (x s)
-                                            (y (f2b s)))))))
+;;    (:claim (rel-b s (f2b s))
+;;            :hints (("Goal" :use ((:instance rel-B-symmetric
+;;                                             (x s)
+;;                                             (y (f2b s)))))))
 
-   (:claim (rel-b s w)
-           :hints (("Goal" :use ((:instance rel-B-transitive
-                                            (x s)
-                                            (y (f2b s))
-                                            (z w))))))
-   (:claim (rel-b (f2b s) w)
-           :hints (("Goal" :use ((:instance rel-B-transitive
-                                            (x (f2b s))
-                                            (y s)
-                                            (z w))))))
+;;    (:claim (rel-b s w)
+;;            :hints (("Goal" :use ((:instance rel-B-transitive
+;;                                             (x s)
+;;                                             (y (f2b s))
+;;                                             (z w))))))
+;;    (:claim (rel-b (f2b s) w)
+;;            :hints (("Goal" :use ((:instance rel-B-transitive
+;;                                             (x (f2b s))
+;;                                             (y s)
+;;                                             (z w))))))
    
-   (:claim (s-bnp (f2b u)))
-   (:claim (== (f2b s) (f2b w)))
-   (:claim (v (^ (rel-> w (exists-v2 (f2b u) w))
-                 (rel-B (f2b u) (exists-v2 (f2b u) w)))
-              (^ (rel-> w (exists-v2 (f2b u) w))
-                 (rel-B (f2b s) (exists-v2 (f2b u) w))
-                 (< (erankl (exists-v2 (f2b u) w) (f2b u))
-                    (erankl w (f2b u)))))
-           :hints (("Goal" :use ((:instance web3-help1)))))
+;;    (:claim (s-bnp (f2b u)))
+;;    (:claim (== (f2b s) (f2b w)))
+;;    (:claim (v (^ (rel-> w (exists-v2 (f2b u) w))
+;;                  (rel-B (f2b u) (exists-v2 (f2b u) w)))
+;;               (^ (rel-> w (exists-v2 (f2b u) w))
+;;                  (rel-B (f2b s) (exists-v2 (f2b u) w))
+;;                  (< (erankl (exists-v2 (f2b u) w) (f2b u))
+;;                     (erankl w (f2b u)))))
+;;            :hints (("Goal" :use ((:instance web3-help1)))))
 
 
-   (:claim (borfp (exists-v2 (f2b u) w)))
-   (= (erankl (exists-v2 (f2b u) w) u)
-      (erankl (exists-v2 (f2b u) w) (f2b u))
-      :hints (("Goal" :use ((:instance prop=erankl-f2b-u
-                                       (s (exists-v2 (f2b u) w)))))))
-   (:claim (borfp w))
-   (= (erankl w u)
-      (erankl w (f2b u))
-      :hints (("Goal" :use ((:instance prop=erankl-f2b-u
-                                       (s w))))))
+;;    (:claim (borfp (exists-v2 (f2b u) w)))
+;;    (= (erankl (exists-v2 (f2b u) w) u)
+;;       (erankl (exists-v2 (f2b u) w) (f2b u))
+;;       :hints (("Goal" :use ((:instance prop=erankl-f2b-u
+;;                                        (s (exists-v2 (f2b u) w)))))))
+;;    (:claim (borfp w))
+;;    (= (erankl w u)
+;;       (erankl w (f2b u))
+;;       :hints (("Goal" :use ((:instance prop=erankl-f2b-u
+;;                                        (s w))))))
    
-   (:casesplit (^ (rel-> w (exists-v2 (f2b u) w))
-                  (rel-B (f2b u) (exists-v2 (f2b u) w))))
+;;    (:casesplit (^ (rel-> w (exists-v2 (f2b u) w))
+;;                   (rel-B (f2b u) (exists-v2 (f2b u) w))))
 
-   (:claim (borfp u)
-           :hints (("Goal" :use ((:instance fn->borf (x u))))))
-   (:claim (borfp (exists-v2 (f2b u) w))
-           :hints (("Goal" :use ((:instance fn->borf (x (exists-v2 (f2b u)
-                                                                   w)))))))
-   (:claim (borfp (f2b u)))
-   (:claim (rel-B u (exists-v2 (f2b u) w))
-           :hints (("Goal" :use ((:instance rel-B-transitive
-                                            (x u)
-                                            (y (f2b u))
-                                            (z (exists-v2 (f2b u) w)))))))
-   :s
+;;    (:claim (borfp u)
+;;            :hints (("Goal" :use ((:instance fn->borf (x u))))))
+;;    (:claim (borfp (exists-v2 (f2b u) w))
+;;            :hints (("Goal" :use ((:instance fn->borf (x (exists-v2 (f2b u)
+;;                                                                    w)))))))
+;;    (:claim (borfp (f2b u)))
+;;    (:claim (rel-B u (exists-v2 (f2b u) w))
+;;            :hints (("Goal" :use ((:instance rel-B-transitive
+;;                                             (x u)
+;;                                             (y (f2b u))
+;;                                             (z (exists-v2 (f2b u) w)))))))
+;;    :s
    
-   (:claim (borfp (exists-v2 (f2b u) w)))
+;;    (:claim (borfp (exists-v2 (f2b u) w)))
    
-   (:claim (^ (rel-> w (exists-v2 (f2b u) w))
-              (rel-B (f2b s) (exists-v2 (f2b u) w))
-              (< (erankl (exists-v2 (f2b u) w) (f2b u))
-                 (erankl w (f2b u)))))
+;;    (:claim (^ (rel-> w (exists-v2 (f2b u) w))
+;;               (rel-B (f2b s) (exists-v2 (f2b u) w))
+;;               (< (erankl (exists-v2 (f2b u) w) (f2b u))
+;;                  (erankl w (f2b u)))))
    
-   (:claim (rel-B s (exists-v2 (f2b u) w))
-           :hints (("Goal" :use ((:instance rel-B-transitive
-                                            (x s)
-                                            (y (f2b s))
-                                            (z (exists-v2 (f2b u) w)))))))
-   :s))
+;;    (:claim (rel-B s (exists-v2 (f2b u) w))
+;;            :hints (("Goal" :use ((:instance rel-B-transitive
+;;                                             (x s)
+;;                                             (y (f2b s))
+;;                                             (z (exists-v2 (f2b u) w)))))))
+;;    :s))
 
 
 
 
 
 
-(in-theory (e/d (rel->) (exists-v1 exists-v2 rel-B rankl)))
+;; (in-theory (e/d (rel->) (exists-v1 exists-v2 rel-B rankl)))
 
 
-(property prop=rel-B-nil (s w :borf)
-  :h (^ (null s)
-        (rel-B s w))
-  (endp w)
-  :hints  (("Goal" :in-theory (enable rel-B f2b f2b-help))))
+;; (property prop=rel-B-nil (s w :borf)
+;;   :h (^ (null s)
+;;         (rel-B s w))
+;;   (endp w)
+;;   :hints  (("Goal" :in-theory (enable rel-B f2b f2b-help))))
 
-(property prop=rel-B-cons (s w :borf)
-  :h (^ (not (null s))
-        (rel-B s w))
-  (consp w)
-  :hints (("Goal" :in-theory (enable rel-B f2b f2b-help))))
+;; (property prop=rel-B-cons (s w :borf)
+;;   :h (^ (not (null s))
+;;         (rel-B s w))
+;;   (consp w)
+;;   :hints (("Goal" :in-theory (enable rel-B f2b f2b-help))))
 
-(property prop=empty-rel-step-borf (u :borf)
-  :check-contracts? nil
-  :h (^ u (rel-> nil u))
-  (v (rel-join-bn nil u)
-     (rel-join-fn nil u))
-  :instructions
-  (:pro
-   (:casesplit (s-bnp u))
-   (:prove :hints (("Goal" :in-theory (enable rel-skip-bn)
-                    :use ((:instance prop=empty-rel-step-bn
-                                     (s nil))))))
-   (:prove :hints (("Goal" :in-theory (enable rel-skip-fn)
-                    :use ((:instance prop=empty-rel-step-fn)))))
-   ))
-
-
-(definec exists-nil-v (u :borf) :borf
-  :function-contract-hints (("Goal"
-                             :instructions
-                             (:pro
-                              (:claim (borfp (exists-v2 u nil)))
-                              (:claim (borfp (exists-v1 nil u)))
-                              (:claim (v (rel-join-bn nil u)
-                                         (rel-join-fn nil u))
-                                      :hints (("Goal"
-                                               :use ((:instance prop=empty-rel-step-borf)))))
-                              :prove)))
-  :ic (^ u (rel-> nil u))
-    (cond
-     ((s-bnp u) (exists-v2 u nil))
-     ((s-fnp u) (exists-v1 nil u))))
+;; (property prop=empty-rel-step-borf (u :borf)
+;;   :check-contracts? nil
+;;   :h (^ u (rel-> nil u))
+;;   (v (rel-join-bn nil u)
+;;      (rel-join-fn nil u))
+;;   :instructions
+;;   (:pro
+;;    (:casesplit (s-bnp u))
+;;    (:prove :hints (("Goal" :in-theory (enable rel-skip-bn)
+;;                     :use ((:instance prop=empty-rel-step-bn
+;;                                      (s nil))))))
+;;    (:prove :hints (("Goal" :in-theory (enable rel-skip-fn)
+;;                     :use ((:instance prop=empty-rel-step-fn)))))
+;;    ))
 
 
-(definec exists-cons-v (s u w :borf) :borf
-  :ic (^ s
-         (rel-B s w)
-         (rel-> s u))
-  (cond
-   ((^ (s-bnp s) (s-bnp w)) u)
-   ((^ (s-fnp s) (s-bnp w)) (exists-v1 s u))
-   ((^ (s-bnp s) (s-fnp w)) (exists-v2 u w))
-   ((^ (s-fnp s) (s-fnp w)) (exists-v2
-                             (exists-v1 s u)
-                             w))))
+;; (definec exists-nil-v (u :borf) :borf
+;;   :function-contract-hints (("Goal"
+;;                              :instructions
+;;                              (:pro
+;;                               (:claim (borfp (exists-v2 u nil)))
+;;                               (:claim (borfp (exists-v1 nil u)))
+;;                               (:claim (v (rel-join-bn nil u)
+;;                                          (rel-join-fn nil u))
+;;                                       :hints (("Goal"
+;;                                                :use ((:instance prop=empty-rel-step-borf)))))
+;;                               :prove)))
+;;   :ic (^ u (rel-> nil u))
+;;     (cond
+;;      ((s-bnp u) (exists-v2 u nil))
+;;      ((s-fnp u) (exists-v1 nil u))))
 
-(definec exists-v (s u w :borf) :borf
-  :function-contract-hints (("Goal" :in-theory
-                             (disable exists-nil-v-definition-rule
-                                      exists-cons-v-definition-rule)))
-  :ic (^ (rel-B s w)
-         (rel-> s u))
-  (if (null s)
-      (if (null u)
-          nil
-        (exists-nil-v u))
-    (exists-cons-v s u w)))
 
-(property prop=cons-s-exists-v (s u w :borf)
-  :h (^ s
-        (rel-B s w)
-        (rel-> s u))
-  (== (exists-v s u w)
-      (exists-cons-v s u w)))
+;; (definec exists-cons-v (s u w :borf) :borf
+;;   :ic (^ s
+;;          (rel-B s w)
+;;          (rel-> s u))
+;;   (cond
+;;    ((^ (s-bnp s) (s-bnp w)) u)
+;;    ((^ (s-fnp s) (s-bnp w)) (exists-v1 s u))
+;;    ((^ (s-bnp s) (s-fnp w)) (exists-v2 u w))
+;;    ((^ (s-fnp s) (s-fnp w)) (exists-v2
+;;                              (exists-v1 s u)
+;;                              w))))
 
-(in-theory (disable rel-B rel-> exists-v2 exists-v1
-                    borfp s-fnp s-bnp join-fn join-bn))
+;; (definec exists-v (s u w :borf) :borf
+;;   :function-contract-hints (("Goal" :in-theory
+;;                              (disable exists-nil-v-definition-rule
+;;                                       exists-cons-v-definition-rule)))
+;;   :ic (^ (rel-B s w)
+;;          (rel-> s u))
+;;   (if (null s)
+;;       (if (null u)
+;;           nil
+;;         (exists-nil-v u))
+;;     (exists-cons-v s u w)))
 
-(property prop=exists-cons-v1 (s u w :borf)
-  :h (^ s
-        (rel-B s w)
-        (rel-> s u)
-        (s-bnp s)
-        (s-bnp w))
-  (== (exists-cons-v s u w) u))
+;; (property prop=cons-s-exists-v (s u w :borf)
+;;   :h (^ s
+;;         (rel-B s w)
+;;         (rel-> s u))
+;;   (== (exists-v s u w)
+;;       (exists-cons-v s u w)))
 
-(property prop=exists-cons-v2 (s u w :borf)
-  :h (^ s
-        (rel-B s w)
-        (rel-> s u)
-        (s-fnp s)
-        (s-bnp w))
-  (== (exists-cons-v s u w) (exists-v1 s u)))
+;; (in-theory (disable rel-B rel-> exists-v2 exists-v1
+;;                     borfp s-fnp s-bnp join-fn join-bn))
 
-(property prop=exists-cons-v3 (s u w :borf)
-  :h (^ s
-        (rel-B s w)
-        (rel-> s u)
-        (s-bnp s)
-        (s-fnp w))
-  (== (exists-cons-v s u w) (exists-v2 u w)))
+;; (property prop=exists-cons-v1 (s u w :borf)
+;;   :h (^ s
+;;         (rel-B s w)
+;;         (rel-> s u)
+;;         (s-bnp s)
+;;         (s-bnp w))
+;;   (== (exists-cons-v s u w) u))
 
-(property prop=exists-cons-v4 (s u w :borf)
-  :h (^ s
-        (rel-B s w)
-        (rel-> s u)
-        (s-fnp s)
-        (s-fnp w))
-  (== (exists-cons-v s u w)
-      (exists-v2 (exists-v1 s u) w)))      
+;; (property prop=exists-cons-v2 (s u w :borf)
+;;   :h (^ s
+;;         (rel-B s w)
+;;         (rel-> s u)
+;;         (s-fnp s)
+;;         (s-bnp w))
+;;   (== (exists-cons-v s u w) (exists-v1 s u)))
+
+;; (property prop=exists-cons-v3 (s u w :borf)
+;;   :h (^ s
+;;         (rel-B s w)
+;;         (rel-> s u)
+;;         (s-bnp s)
+;;         (s-fnp w))
+;;   (== (exists-cons-v s u w) (exists-v2 u w)))
+
+;; (property prop=exists-cons-v4 (s u w :borf)
+;;   :h (^ s
+;;         (rel-B s w)
+;;         (rel-> s u)
+;;         (s-fnp s)
+;;         (s-fnp w))
+;;   (== (exists-cons-v s u w)
+;;       (exists-v2 (exists-v1 s u) w)))      
   
-(in-theory (disable exists-cons-v
-                    exists-v1
-                    exists-v2))
+;; (in-theory (disable exists-cons-v
+;;                     exists-v1
+;;                     exists-v2))
   
 
-(property web3-nil (s u w :borf)
-  :check-contracts? nil
-  :h (^ (rel-B s w)
-        (rel-> s u)
-        (null s))
-  (^ (rel-> w (exists-v s u w))
-     (rel-B u (exists-v s u w)))
-  :instructions
-  (:pro
+;; (property web3-nil (s u w :borf)
+;;   :check-contracts? nil
+;;   :h (^ (rel-B s w)
+;;         (rel-> s u)
+;;         (null s))
+;;   (^ (rel-> w (exists-v s u w))
+;;      (rel-B u (exists-v s u w)))
+;;   :instructions
+;;   (:pro
    
-   (:claim (== w nil)
-           :hints (("Goal" :use ((:instance prop=rel-B-nil)))))
+;;    (:claim (== w nil)
+;;            :hints (("Goal" :use ((:instance prop=rel-B-nil)))))
       
-   (:casesplit (null u))
-   (= u nil)
-   (= (exists-v s nil w) nil)
-   (:prove :hints (("Goal" :use ((:instance
-                                  web3-1 (s nil) (w nil))))))
+;;    (:casesplit (null u))
+;;    (= u nil)
+;;    (= (exists-v s nil w) nil)
+;;    (:prove :hints (("Goal" :use ((:instance
+;;                                   web3-1 (s nil) (w nil))))))
 
-   (:casesplit (s-fnp u))
-   (= (exists-v s u w)
-      (exists-v1 nil u))
-   (:prove :hints (("Goal" :use ((:instance
-                                  web3-1 (s nil) (w nil))))))
+;;    (:casesplit (s-fnp u))
+;;    (= (exists-v s u w)
+;;       (exists-v1 nil u))
+;;    (:prove :hints (("Goal" :use ((:instance
+;;                                   web3-1 (s nil) (w nil))))))
 
-   (:claim (s-bnp u))
-   (= (exists-v s u w)
-      (exists-v2 u nil))
-   (:prove :hints (("Goal" :use ((:instance
-                                  web3-2 (s nil) (w nil))))))
-   ))
+;;    (:claim (s-bnp u))
+;;    (= (exists-v s u w)
+;;       (exists-v2 u nil))
+;;    (:prove :hints (("Goal" :use ((:instance
+;;                                   web3-2 (s nil) (w nil))))))
+;;    ))
 
 
 
-(in-theory (disable br-mssg-witness bn-join-witness erankl))
+;; (in-theory (disable br-mssg-witness bn-join-witness erankl))
 
-(property web3 (s u w :borf)
-  :check-contracts? nil
+;; (property web3 (s u w :borf)
+;;   :check-contracts? nil
 
-  :h (^ (rel-B s w)
-        (rel-> s u)      
+;;   :h (^ (rel-B s w)
+;;         (rel-> s u)      
 
-        (=> (s-fnp s)
-            (f2b-refinement-conditions s
-                                       (br-mssg-witness (f2b s) (f2b u))
-                                       (car (bn-join-witness (f2b u)
-                                                             (f2b s)))))
-        (=> (^ (s-bnp s) (s-fnp w))
-            (f2b-refinement-conditions w
-                                       (br-mssg-witness (f2b w) u)
-                                       (car (bn-join-witness u (f2b w)))))
-        (=> (^ (s-fnp s) (s-fnp w))
-            (f2b-refinement-conditions w
-                                       (br-mssg-witness (f2b s) (f2b u))
-                                       (car (bn-join-witness (f2b u)
-                                                             (f2b s))))))
-  (v (^ (rel-> w (exists-v s u w))
-        (rel-B u (exists-v s u w)))
-     (^ (rel-> w (exists-v s u w))
-        (rel-B s (exists-v s u w))
-        (< (erankl (exists-v s u w) u)
-           (erankl w u))))
-  :instructions
-  (:pro
-   (:casesplit (null s))
-   (:prove :hints (("Goal" :use ((:instance web3-nil)))))
+;;         (=> (s-fnp s)
+;;             (f2b-refinement-conditions s
+;;                                        (br-mssg-witness (f2b s) (f2b u))
+;;                                        (car (bn-join-witness (f2b u)
+;;                                                              (f2b s)))))
+;;         (=> (^ (s-bnp s) (s-fnp w))
+;;             (f2b-refinement-conditions w
+;;                                        (br-mssg-witness (f2b w) u)
+;;                                        (car (bn-join-witness u (f2b w)))))
+;;         (=> (^ (s-fnp s) (s-fnp w))
+;;             (f2b-refinement-conditions w
+;;                                        (br-mssg-witness (f2b s) (f2b u))
+;;                                        (car (bn-join-witness (f2b u)
+;;                                                              (f2b s))))))
+;;   (v (^ (rel-> w (exists-v s u w))
+;;         (rel-B u (exists-v s u w)))
+;;      (^ (rel-> w (exists-v s u w))
+;;         (rel-B s (exists-v s u w))
+;;         (< (erankl (exists-v s u w) u)
+;;            (erankl w u))))
+;;   :instructions
+;;   (:pro
+;;    (:casesplit (null s))
+;;    (:prove :hints (("Goal" :use ((:instance web3-nil)))))
 
-   (:claim s)
-   (:claim (consp w)
-           :hints (("Goal" :use ((:instance
-                                  prop=rel-B-cons)))))
-   (= (exists-v s u w)
-      (exists-cons-v s u w)
-      :hints (("Goal" :use ((:instance prop=cons-s-exists-v)))))
+;;    (:claim s)
+;;    (:claim (consp w)
+;;            :hints (("Goal" :use ((:instance
+;;                                   prop=rel-B-cons)))))
+;;    (= (exists-v s u w)
+;;       (exists-cons-v s u w)
+;;       :hints (("Goal" :use ((:instance prop=cons-s-exists-v)))))
    
-   (:casesplit (s-bnp w))
-   (:casesplit (s-bnp s))
-   (= (exists-cons-v s u w) u
-      :hints (("Goal" :use (:instance prop=exists-cons-v1))))
-   (= w s)
-   (:claim (rel-b u u)
-           :hints (("Goal" :use (:instance rel-B-reflexive (x u)))))
-   :s
+;;    (:casesplit (s-bnp w))
+;;    (:casesplit (s-bnp s))
+;;    (= (exists-cons-v s u w) u
+;;       :hints (("Goal" :use (:instance prop=exists-cons-v1))))
+;;    (= w s)
+;;    (:claim (rel-b u u)
+;;            :hints (("Goal" :use (:instance rel-B-reflexive (x u)))))
+;;    :s
 
-   (:claim (s-fnp s))
-   (= (exists-cons-v s u w) (exists-v1 s u)
-      :hints (("Goal" :use (:instance prop=exists-cons-v2))))
-   (:claim (s-fnp u))
-   (:claim (f2b-refinement-conditions s
-                                      (br-mssg-witness (f2b s) (f2b u))
-                                      (car (bn-join-witness (f2b u) (f2b s)))))
-   (:drop 6 7 8 17 18 19 20)
-   (:prove :hints (("Goal" :use ((:instance web3-1-help)))))
+;;    (:claim (s-fnp s))
+;;    (= (exists-cons-v s u w) (exists-v1 s u)
+;;       :hints (("Goal" :use (:instance prop=exists-cons-v2))))
+;;    (:claim (s-fnp u))
+;;    (:claim (f2b-refinement-conditions s
+;;                                       (br-mssg-witness (f2b s) (f2b u))
+;;                                       (car (bn-join-witness (f2b u) (f2b s)))))
+;;    (:drop 6 7 8 17 18 19 20)
+;;    (:prove :hints (("Goal" :use ((:instance web3-1-help)))))
    
-   (:claim (s-fnp w)) 
-   (:casesplit (s-bnp s))
-   (:claim (! (s-fnp s)))
-   (:claim (s-bnp u))
-   (= (exists-cons-v s u w) (exists-v2 u w)
-      :hints (("Goal" :use ((:instance prop=exists-cons-v3)))))
+;;    (:claim (s-fnp w)) 
+;;    (:casesplit (s-bnp s))
+;;    (:claim (! (s-fnp s)))
+;;    (:claim (s-bnp u))
+;;    (= (exists-cons-v s u w) (exists-v2 u w)
+;;       :hints (("Goal" :use ((:instance prop=exists-cons-v3)))))
 
-   (:claim (f2b-refinement-conditions w
-                                      (br-mssg-witness (f2b w) u)
-                                      (car (bn-join-witness u (f2b w)))))
-   (:drop 6 7 8)
-   (:prove :hints (("Goal" :use ((:instance web3-2)))))
+;;    (:claim (f2b-refinement-conditions w
+;;                                       (br-mssg-witness (f2b w) u)
+;;                                       (car (bn-join-witness u (f2b w)))))
+;;    (:drop 6 7 8)
+;;    (:prove :hints (("Goal" :use ((:instance web3-2)))))
    
-   (:claim (s-fnp s))
-   (:claim (s-fnp u))
-   (= (exists-cons-v s u w)
-      (exists-v2 (exists-v1 s u) w)
-      :hints (("Goal" :use ((:instance prop=exists-cons-v4)))))
+;;    (:claim (s-fnp s))
+;;    (:claim (s-fnp u))
+;;    (= (exists-cons-v s u w)
+;;       (exists-v2 (exists-v1 s u) w)
+;;       :hints (("Goal" :use ((:instance prop=exists-cons-v4)))))
 
-   (:claim (f2b-refinement-conditions s
-                                      (br-mssg-witness (f2b s) (f2b u))
-                                      (car (bn-join-witness (f2b u) (f2b s)))))
-   (:claim (f2b-refinement-conditions w
-                                      (br-mssg-witness (f2b s) (f2b u))
-                                      (car (bn-join-witness (f2b u) (f2b s)))))
-   (:drop 6 7 8)
-   (:prove :hints (("Goal" :use ((:instance web3-3)))))))
+;;    (:claim (f2b-refinement-conditions s
+;;                                       (br-mssg-witness (f2b s) (f2b u))
+;;                                       (car (bn-join-witness (f2b u) (f2b s)))))
+;;    (:claim (f2b-refinement-conditions w
+;;                                       (br-mssg-witness (f2b s) (f2b u))
+;;                                       (car (bn-join-witness (f2b u) (f2b s)))))
+;;    (:drop 6 7 8)
+;;    (:prove :hints (("Goal" :use ((:instance web3-3)))))))
 

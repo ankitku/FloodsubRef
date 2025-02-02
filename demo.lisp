@@ -490,6 +490,68 @@
 (property prop=s-sb-s-fn-nil (x :s-bn :s-fn)
   (null x))
 
+
+;;---------------------------------------------------
+;; Good fn states
+;;---------------------------------------------------
+
+(definecd good-s-fnp (s :s-fn) :bool
+  (^ (pending-!in-seen-s-fn s)
+     (p!in-nsubs-s-fn s)
+     (pending-origins-s-fn s)))
+
+;; Properties we need good-fn states to satisfy
+
+(property prop=good-s-fn1 (s :s-fn p :peer m :mssg)
+    :h (^ (mget p s)
+        (in m (mget :pending (mget p s)))
+        (good-s-fnp s))
+    (! (in m (mget :seen (mget p s)))))
+
+(property prop=good-s-fn2 (p :peer tp :topic s :s-fn)
+  :check-contracts? nil
+  :h (^ (mget p s)
+        (good-s-fnp s))
+  (! (in p (mget tp (mget :nsubs (mget p s))))))
+
+(property prop=good-s-fn3 (m :mssg s :s-fn)
+  :h (^ (in m (fn-pending-mssgs s))
+        (good-s-fnp s))
+  (^ (mget (mget :or m) s)
+     (in (mget :tp m)
+         (mget :pubs (mget (mget :or m) s)))))
+
+;; good-s-fnp is preserved across all fn transitions,
+;; except leave-fn
+(property prop=good-s-fn-produce (s :s-fn m :mssg)
+  :check-contracts? nil
+  :h (^ (good-s-fnp s)
+        (produce-fn-pre m s))
+  (good-s-fnp (produce-fn m s)))
+
+(property prop=good-s-fn-forward (p :peer m :mssg s :s-fn)
+  :check-contracts? nil
+  :h (^ (mget p s)
+        (in m (mget :pending (mget p s)))
+        (good-s-fnp s))
+  (good-s-fnp (forward-fn p m s)))
+
+(property prop=good-s-fn-subscribe (s :s-fn p :peer topics :lot)
+  :h (^ (mget p s)
+        (good-s-fnp s))
+  (good-s-fnp (subscribe-fn p topics s)))
+
+(property prop=good-s-fn-unsubscribe (s :s-fn p :peer topics :lot)
+  :h (^ (mget p s)
+        (good-s-fnp s))
+  (good-s-fnp (unsubscribe-fn p topics s)))
+
+(property prop=good-s-fn-join (p :peer pubs subs :lot nbrs :lop s :s-fn)
+  :h (^ (! (mget p s))
+        (! (in p nbrs))
+        (good-s-fnp s))
+  (good-s-fnp (join-fn p pubs subs nbrs s)))
+
 ;;---------------------------------------------------
 ;; B relation between borf states
 ;;---------------------------------------------------
@@ -500,12 +562,20 @@
 ;; relation, there exists a state v such that it is obtained by applying some
 ;; rule to w, and either uBv or sBv and there is a measure that
 ;; decreases when going from w to v.
+(definec rel-wf (x y :borf) :boolean
+  (^ (s-bnp x)
+     (s-fnp y)
+     (good-s-fnp y)
+     (== x (f2b y))))
+  
 (definec rel-B (x y :borf) :boolean
-  (cond
-   ((^ (s-fnp x) (s-fnp y)) (== (f2b x) (f2b y)))
-   ((^ (s-fnp x) (s-bnp y)) (== (f2b x) y))
-   ((^ (s-fnp y) (s-bnp x)) (== (f2b y) x))
-   (t (== x y))))
+  (v (rel-wf x y)
+     (rel-wf y x)
+     (== x y)
+     (^ (s-fnp x) (s-fnp y)
+        (== (f2b x) (f2b y))
+        (good-s-fnp x)
+        (good-s-fnp y))))
 
 ;; rel-B is an equivalence relation
 
@@ -526,10 +596,15 @@
 ;;---------------------------------------------------
 
 ;; Relation rel-> is a union of rel-step-fn and rel-step-bn relations
+(definec good-rel-step-fn (s u :s-fn) :bool
+  (^ (good-s-fnp s)
+     (good-s-fnp u)
+     (rel-step-fn s u)))
+
 (definec rel-> (s u :borf) :bool
   (v (^ (s-fnp s)
         (s-fnp u)
-        (rel-step-fn s u))
+        (good-rel-step-fn s u))
      (^ (s-bnp s)
         (s-bnp u)
         (rel-step-bn s u))))
@@ -543,6 +618,7 @@
 ;;---------------------------------------------------
 
 (property b-maps-f2b (s :s-fn)
+  :h (good-s-fnp s)
   (rel-B s (f2b s)))
 
 ;;---------------------------------------------------
