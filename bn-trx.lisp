@@ -1,32 +1,5 @@
 (in-package "ACL2S")
-
 (include-book "utils")
-
-(defdata-alias peer nat)
-(defdata-alias lop nat-list)
-(defdata-alias topic var)
-
-;; Peers are identified by natural numbers
-;; Topics are identified by variables
-;; A message contains payload, topic and originating peer
-(defdata mssg (record
-               (pld . string)
-               (tp . topic)
-               (or . peer)))
-
-(property mssg-check-prop (x :mssg)
-  (^ (stringp (mget :pld x))
-     (topicp (mget :tp x))
-     (peerp (mget :or x)))
-  :hints (("Goal" :in-theory (enable mssgp)))
-  :rule-classes :forward-chaining)
-
-(sig isort-set ((listof :a)) => (listof :a))
-(sig insert-unique (:a (listof :a)) => (listof :a))
-
-(defdata lom (listof mssg))
-(defdata lot (listof topic))
-(defdata topic-lop-map (map topic lop))
 
 ;; peer state in a Broadcast Network
 (defdata ps-bn (record
@@ -65,8 +38,9 @@
   (match st
     (() nil)
     (((p . pst) . rst)
-     (cons `(,p . ,(if (in (mget :tp m)
-                           (mget :subs pst))
+     (cons `(,p . ,(if (v (in (mget :tp m)
+                              (mget :subs pst))
+                          (== p (mget :or m)))
                        (mset :seen
                              (insert-unique m (mget :seen pst))
                              pst)
@@ -77,6 +51,26 @@
   :ic (broadcast-bn-pre m s)
   (broadcast-help m s))
 
+(definecd broadcast-partial-help (m :mssg ps :lop st :s-bn) :s-bn
+  :function-contract-hints (("Goal" :in-theory (enable
+                                                acl2::maximal-records-theory)))
+  (match st
+    (() nil)
+    (((p . pst) . rst)
+     (cons `(,p . ,(if (== p (car ps))
+                       (mset :seen
+                             (insert-unique m (mget :seen pst))
+                             pst)
+                     pst))
+           (broadcast-partial-help m
+                                   (if (== p (car ps))
+                                       (cdr ps)
+                                     ps)
+                                   rst)))))
+
+(definecd broadcast-partial (m :mssg ps :lop s :s-bn) :s-bn
+  :ic (new-bn-mssgp m s)
+  (broadcast-partial-help m ps s))
 
 (definecd join-bn (p :peer pubs subs :lot st :s-bn) :s-bn
   :function-contract-hints (("Goal" :in-theory (enable ps-bnp)))

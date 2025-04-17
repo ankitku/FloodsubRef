@@ -1,5 +1,5 @@
 (in-package "ACL2S")
-(include-book "good-fn")
+(include-book "f2b-sim-ref")
 
 ;;---------------------------------------------------
 ;; Broadcast Network state and transition
@@ -30,25 +30,14 @@
                (tp . topic)
                (or . peer)))
 
-
-
 ;; We define the transition relation rel-step-bn as follows : Given Broadcastnet
 ;; (s-bn) states s and u, peer p, lists of topics pubs, subs and topics,
 ;; and message m, (rel-step-bn p pubs subs topics m s u) iff one of the
-;; several s-bn transitions holds:
-;; (rel-skip-bn s u)
-;; (rel-broadcast-bn m s u)
-;; (rel-subscribe-bn p topics s u)
-;; (rel-unsubscribe-bn p topics s u)
-;; (rel-leave-bn p s u)
-;; (rel-join-bn p pubs subs s u)
-
-;; Each of the above transition relation holds iff u is obtained by
-;; applying some enabled BN rule to s.
+;; several s-bn transitions holds.
 
 (definec rel-step-bn (s u :s-bn) :bool
   (v (rel-skip-bn s u)
-     (rel-broadcast-bn s u)
+     (rel-broadcast-partial-bn s u)
      (rel-subscribe-bn s u)
      (rel-unsubscribe-bn s u)
      (rel-leave-bn s u)
@@ -56,6 +45,13 @@
 
 (definecd rel-skip-bn (s u :s-bn) :bool
   (== u s))
+
+(definecd rel-broadcast-partial-bn (s u :s-bn) :bool
+  (^ (br-mssg-witness s u)
+     (new-bn-mssgp (br-mssg-witness s u) s)
+     (== u (broadcast-partial (br-mssg-witness s u)
+                              (brd-receivers-bn (br-mssg-witness s u) u)
+                              s))))
 
 (definecd rel-broadcast-bn (s u :s-bn) :bool
   (^ (br-mssg-witness s u)
@@ -85,6 +81,28 @@
   (v (endp s)
      (^ (! (in m (mget :seen (cdar s))))
         (new-bn-mssgp m (cdr s)))))
+
+;; Broadcast m to all peers in ps
+(definecd broadcast-partial (m :mssg ps :lop s :s-bn) :s-bn
+  :ic (new-bn-mssgp m s)
+  (broadcast-partial-help m ps s))
+
+(definecd broadcast-partial-help (m :mssg ps :lop st :s-bn) :s-bn
+  (match st
+    (() nil)
+    (((p . pst) . rst)
+     (cons `(,p . ,(if (== p (car ps))
+                       (mset :seen
+                             (insert-unique m (mget :seen pst))
+                             pst)
+                     pst))
+           (broadcast-partial-help m
+                                   (if (== p (car ps))
+                                       (cdr ps)
+                                     ps)
+                                   rst)))))
+
+
 
 (definecd broadcast (m :mssg s :s-bn) :s-bn
   :ic (broadcast-bn-pre m s)
@@ -215,8 +233,7 @@
 (definec rel-step-fn (s u :s-fn) :bool
   (v (rel-skip-fn s u)
      (rel-produce-fn s u)
-     (rel-forward-fn1 s u)
-     (rel-forward-fn2 s u)
+     (rel-forward-fn s u)
      (rel-subscribe-fn s u)
      (rel-unsubscribe-fn s u)
      (rel-leave-fn s u)
@@ -271,40 +288,19 @@
 
 
 
-;; rel-forward-fn1 and rel-forward-fn2 both relate states after applying
-;; forward-fn rule. They differ in the outcome of this rule application. We
-;; prove that when
-;; (!= (fn-pending-mssgs (forward-fn p m s))
-;;     (fn-pending-mssgs s))
-;; then
-;; (== (fn-pending-mssgs (forward-fn p m s))
-;;     (remove-equal m (fn-pending-mssgs s)))
-(definecd rel-forward-fn1 (s u :s-fn) :bool
-  (let ((m (br-mssg-witness (f2b s) (f2b u)))) ;; message is broadcasted in rel-forward-fn1
-    (^ m
-       (in m (fn-pending-mssgs s))
-       (! (in m (mget :seen (mget (find-forwarder s m) s))))        ;; Invariant
-       (!= (fn-pending-mssgs (forward-fn (find-forwarder s m) m s)) ;; CASE
-           (fn-pending-mssgs s))
-       (^ (mget (mget :or m) s)   ;; CONDITION 1. origin still exists
-          (in (mget :tp m)                           ;; while message is pending
-              (mget :pubs (mget (mget :or m) s))))
-       (== u (forward-fn (find-forwarder s m) m s)))))
 
-(definecd rel-forward-fn2 (s u :s-fn) :bool
-  (rel-forward-help-fn2 s u (fn-pending-mssgs s)))
+(definecd rel-forward-fn (s u :s-fn) :bool
+    (rel-forward-help-fn s u (fn-pending-mssgs s)))
 
-(definec rel-forward-help-fn2 (s u :s-fn ms :lom) :bool
+(definec rel-forward-help-fn (s u :s-fn ms :lom) :bool
   (match ms
     (() nil)
     ((m . rst)
      (v (^ (in m (fn-pending-mssgs s))
-           (! (in m (mget :seen (mget (find-forwarder s m) s))))  ;; Invariant
-           (== (fn-pending-mssgs
-                (forward-fn (find-forwarder s m) m s)) ;;CASE
-               (fn-pending-mssgs s))
            (== u (forward-fn (find-forwarder s m) m s)))
-        (rel-forward-help-fn2 s u rst)))))
+        (rel-forward-help-fn s u rst)))))
+
+
 
 ;; The peer that forwards the pending message m
 (definec find-forwarder (s :s-fn m :mssg) :peer
@@ -319,7 +315,6 @@
            p
          (find-forwarder rst m)))))
 
-
 (definecd forward-fn (p :peer m :mssg s :s-fn) :s-fn
   :ic (^ (mget p s)
          (in m (mget :pending (mget p s))))
@@ -329,16 +324,6 @@
        (fwdnbrs (mget tp nsubs)))
     (forward-help-fn (update-forwarder-fn p m s)
                      fwdnbrs m)))
-
-(definecd forward-help-fn (s :s-fn nbrs :lop m :mssg) :s-fn
-  (match s
-    (() '())
-    (((q . qst) . rst)
-     (cons (if (in q nbrs)
-               `(,q . ,(add-pending-psfn m qst))
-             `(,q . ,qst))
-           (forward-help-fn rst nbrs m)))))
-
 
 (definec update-forwarder-fn (p :peer m :mssg s :s-fn) :s-fn
   (match s
@@ -355,8 +340,14 @@
               (remove-equal m (mget :pending pst))
               pst)))
 
-
-
+(definecd forward-help-fn (s :s-fn nbrs :lop m :mssg) :s-fn
+  (match s
+    (() '())
+    (((q . qst) . rst)
+     (cons (if (in q nbrs)
+               `(,q . ,(add-pending-psfn m qst))
+             `(,q . ,qst))
+           (forward-help-fn rst nbrs m)))))
 
 (definecd rel-subscribe-fn (s u :s-fn) :bool
   (^ (fn-topics-witness s u)
@@ -399,15 +390,14 @@
 (definecd unsubscribe-fn (p :peer topics :lot s :s-fn) :s-fn
   :ic (mget p s)
   (let ((pst (mget p s)))
-          (set-subs-sfn (ps-fn-nbrs pst)
-                                     topics
-                                     p
-                                     (mset p 
-                                           (mset :subs (set-difference-equal
-                                                        (mget :subs pst)
-                                                        topics)
-                                                 pst)
-                                           s))))
+    (set-subs-sfn (ps-fn-nbrs pst)
+                  topics
+                  p
+                  (mset p (mset :subs (set-difference-equal
+                                       (mget :subs pst)
+                                       topics)
+                                pst)
+                        s))))
 
 (definecd rel-join-fn (s u :s-fn) :bool
   (^ (fn-join-witness s u)
@@ -423,8 +413,7 @@
                          s))))))
 
 
-(defdata maybe-ppsfn (v nil
-                        (cons peer ps-fn)))
+(defdata maybe-ppsfn (v nil (cons peer ps-fn)))
 
 (definec fn-join-witness (s u :s-fn) :maybe-ppsfn
   (b* ((res (bn-join-witness (f2b s) (f2b u)))
@@ -446,8 +435,7 @@
 (definecd rel-leave-fn (s u :s-fn) :bool
   (^ (fn-join-witness u s)
      (mget (car (fn-join-witness u s)) s)
-     (== (fn-pending-mssgs (leave-fn (car (fn-join-witness u s)) s))
-         (fn-pending-mssgs s))
+     (endp (mget :pending (mget (car (fn-join-witness u s)) s)))
      (== u (leave-fn (car (fn-join-witness u s)) s))))
 
 (definecd leave-fn (p :peer s :s-fn) :s-fn
@@ -490,117 +478,28 @@
 (property prop=s-sb-s-fn-nil (x :s-bn :s-fn)
   (null x))
 
-
-;;---------------------------------------------------
-;; Good fn states
-;;---------------------------------------------------
-
-(definecd good-s-fnp (s :s-fn) :bool
-  (^ (pending-!in-seen-s-fn s)
-     (p!in-nsubs-s-fn s)
-     (pending-origins-s-fn s)))
-
-;; Properties we need good-fn states to satisfy
-
-(property prop=good-s-fn1 (s :s-fn p :peer m :mssg)
-    :h (^ (mget p s)
-        (in m (mget :pending (mget p s)))
-        (good-s-fnp s))
-    (! (in m (mget :seen (mget p s)))))
-
-(property prop=good-s-fn2 (p :peer tp :topic s :s-fn)
-  :check-contracts? nil
-  :h (^ (mget p s)
-        (good-s-fnp s))
-  (! (in p (mget tp (mget :nsubs (mget p s))))))
-
-(property prop=good-s-fn3 (m :mssg s :s-fn)
-  :h (^ (in m (fn-pending-mssgs s))
-        (good-s-fnp s))
-  (^ (mget (mget :or m) s)
-     (in (mget :tp m)
-         (mget :pubs (mget (mget :or m) s)))))
-
-;; good-s-fnp is preserved across all fn transitions,
-;; except leave-fn
-(property prop=good-s-fn-produce (s :s-fn m :mssg)
-  :check-contracts? nil
-  :h (^ (good-s-fnp s)
-        (produce-fn-pre m s))
-  (good-s-fnp (produce-fn m s)))
-
-(property prop=good-s-fn-forward (p :peer m :mssg s :s-fn)
-  :check-contracts? nil
-  :h (^ (mget p s)
-        (in m (mget :pending (mget p s)))
-        (good-s-fnp s))
-  (good-s-fnp (forward-fn p m s)))
-
-(property prop=good-s-fn-subscribe (s :s-fn p :peer topics :lot)
-  :h (^ (mget p s)
-        (good-s-fnp s))
-  (good-s-fnp (subscribe-fn p topics s)))
-
-(property prop=good-s-fn-unsubscribe (s :s-fn p :peer topics :lot)
-  :h (^ (mget p s)
-        (good-s-fnp s))
-  (good-s-fnp (unsubscribe-fn p topics s)))
-
-(property prop=good-s-fn-join (p :peer pubs subs :lot nbrs :lop s :s-fn)
-  :h (^ (! (mget p s))
-        (! (in p nbrs))
-        (good-s-fnp s))
-  (good-s-fnp (join-fn p pubs subs nbrs s)))
-
 ;;---------------------------------------------------
 ;; B relation between borf states
 ;;---------------------------------------------------
 
 ;; We define the rel-B relation on a union of s-fn and s-bn states as
-;; follows. The refinement theorem will prove that for states s and w
-;; such that (rel-B s w), and for states s and u related by some transition
-;; relation, there exists a state v such that it is obtained by applying some
-;; rule to w, and either uBv or sBv and there is a measure that
-;; decreases when going from w to v.
-(definec rel-wf (x y :borf) :boolean
-  (^ (s-bnp x)
-     (s-fnp y)
-     (good-s-fnp y)
-     (== x (f2b y))))
-  
+;; follows.
 (definec rel-B (x y :borf) :boolean
   (v (rel-wf x y)
-     (rel-wf y x)
-     (== x y)
-     (^ (s-fnp x) (s-fnp y)
-        (== (f2b x) (f2b y))
-        (good-s-fnp x)
-        (good-s-fnp y))))
+     (== x y)))
 
-;; rel-B is an equivalence relation
-
-(propertyd rel-B-reflexive (x :borf)
-  (rel-B x x))
-  
-(propertyd rel-B-symmetric (x y :borf)
-  (== (rel-B x y)
-      (rel-B y x)))
-
-(propertyd rel-B-transitive (x y z :borf)
-  :h (^ (rel-B x y)
-        (rel-B y z))
-  (rel-B x z))
+(definec rel-wf (x y :borf) :boolean
+  (^ (s-fnp x)
+     (s-bnp y)
+     (good-s-fnp x)
+     (== y (f2b x))))
 
 ;;---------------------------------------------------
 ;; Combined Transition relation
 ;;---------------------------------------------------
 
-;; Relation rel-> is a union of rel-step-fn and rel-step-bn relations
-(definec good-rel-step-fn (s u :s-fn) :bool
-  (^ (good-s-fnp s)
-     (good-s-fnp u)
-     (rel-step-fn s u)))
-
+;; Relation rel-> is a union of good-rel-step-fn and
+;; rel-step-bn relations
 (definec rel-> (s u :borf) :bool
   (v (^ (s-fnp s)
         (s-fnp u)
@@ -609,12 +508,58 @@
         (s-bnp u)
         (rel-step-bn s u))))
 
-;; NOTICE : the following forms are from f2b-ref2, which is not imported at
-;; this time.
+(definec good-rel-step-fn (s u :s-fn) :bool
+  (^ (good-s-fnp s)
+     (good-s-fnp u)
+     (rel-step-fn s u)))
+
+(definec good-s-fnp (s :s-fn) :bool
+  (^ (pending-!in-seen-s-fn s)
+     (p!in-nsubs-s-fn s)
+     (ordered-seenp s)))
+
+(definec pending-!in-seen-s-fn (s :s-fn) :bool
+  (match s
+    (() t)
+    (((& . pst) . rst)
+     (^ (pending-!in-seen-ps-fn pst (mget :pending pst))
+        (pending-!in-seen-s-fn rst)))))
+
+(definec p!in-nsubs-s-fn (s :s-fn) :bool
+  (match s
+    (() t)
+    (((p . pst) . rst)
+     (^ (p!in-nsubs-ps-fn p pst)
+        (p!in-nsubs-s-fn rst)))))
+
+(definec p!in-nsubs-ps-fn-help (p :peer nsubs :topic-lop-map) :bool
+  (match nsubs
+    (() t)
+    (((& . ps) . rst)
+     (^ (! (in p ps))
+        (p!in-nsubs-ps-fn-help p rst)))))
+
+(definec ordered-seenp (s :s-fn) :boolean
+  (match s
+    (() t)
+    (((& . pst) . rst)
+     (^ (orderedp (mget :seen pst))
+        (ordered-seenp rst)))))
+
+(property prop=ordered-seenp-cdar (s :s-fn)
+  :h (^ s (ordered-seenp s))
+  (orderedp (mget :seen (cdar s))))
+
+(definec orderedp (x :tl) :boolean
+  (match x
+    (() t)
+    ((&) t)
+    ((a . (b . &)) (^ (<< a b)
+                      (orderedp (cdr x))))))
 
 ;; We are now ready to prove refinement.
 ;;---------------------------------------------------
-;; WEB 1
+;; WFS 1
 ;;---------------------------------------------------
 
 (property b-maps-f2b (s :s-fn)
@@ -622,7 +567,7 @@
   (rel-B s (f2b s)))
 
 ;;---------------------------------------------------
-;; WEB 2
+;; WFS 2
 ;;---------------------------------------------------
 
 (definec L (s :borf) :borf
@@ -630,13 +575,13 @@
     (:s-bn s)
     (:s-fn (f2b s))))
 
-(property web2 (s w :borf)
+(property wfs2 (s w :borf)
   :h (rel-B s w)
   (== (L s)
       (L w)))
 
 ;;---------------------------------------------------
-;; WEB 3
+;; WFS 3
 ;;---------------------------------------------------
 
 ;; exists-v is a witness to the existence of v in our refinement
@@ -655,11 +600,10 @@
     (exists-cons-v s u w)))
 
 (definec exists-nil-v (u :borf) :borf
-  :ic (^ u
-         (rel-> nil u))
-    (cond
-     ((s-bnp u) (exists-v2 u nil))
-     ((s-fnp u) (exists-v1 nil u))))
+  :ic (^ u (rel-> nil u))
+  (cond
+   ((s-fnp u) (exists-v1 nil u))
+   ((s-bnp u) u)))
 
 (definec exists-cons-v (s u w :borf) :borf
   :ic (^ s
@@ -668,131 +612,33 @@
   (cond
    ((^ (s-bnp s) (s-bnp w)) u)
    ((^ (s-fnp s) (s-bnp w)) (exists-v1 s u))
-   ((^ (s-bnp s) (s-fnp w)) (exists-v2 u w))
-   ((^ (s-fnp s) (s-fnp w)) (exists-v2
-                             (exists-v1 s u)
-                             w))))
+   ((^ (s-fnp s) (s-fnp w)) u)))
 
 ;; Following functions are witnesses to the existence of v in case of
 ;; non-empty s and w.
 (definec exists-v1 (s u :s-fn) :s-bn
+  :ic (good-s-fnp s)
   (cond
-   ((rel-forward-fn1 s u) (broadcast (br-mssg-witness (f2b s) (f2b u))
-                                     (f2b s)))
-   ((rel-subscribe-fn s u) (f2b u))
-   ((rel-unsubscribe-fn s u) (f2b u))
-   ((rel-join-fn s u) (f2b u))
-   ((rel-leave-fn s u) (f2b u))
-   (t (f2b s))))
-
-(definec exists-v2 (u :s-bn w :s-fn) :s-fn
-    (cond
-     ((v (rel-skip-bn (f2b w) u)
-         (rel-broadcast-bn (f2b w) u))
-      (exists-v22 u w))
-     
-     ((v (rel-subscribe-bn (f2b w) u)
-         (rel-unsubscribe-bn (f2b w) u))
-      (exists-v21 u w))
-
-     ((v (rel-join-bn (f2b w) u)
-         (rel-leave-bn (f2b w) u))
-      (exists-v23 u w))))
+   ((rel-skip-fn s u) (f2b s))
+   ((^ (rel-forward-fn s u)
+       (!= (f2b s) (f2b u)))
+    (broadcast-partial (br-mssg-witness (f2b s) (f2b u))
+                       (brd-receivers-bn
+                        (br-mssg-witness (f2b s) (f2b u))
+                        (f2b u))
+                       (f2b s)))
+   (t (f2b u))))
 
 
-(definec exists-v21 (u :s-bn w :s-fn) :s-fn
-  (cond
-     ((rel-subscribe-bn (f2b w) u)
-      (subscribe-fn (car (bn-topics-witness (f2b w) u))
-                    (cdr (bn-topics-witness (f2b w) u))
-                    w))
+;; Finally, our refinement theorem.
 
-     ((rel-unsubscribe-bn (f2b w) u)
-      (unsubscribe-fn (car (bn-topics-witness u (f2b w)))
-                      (cdr (bn-topics-witness u (f2b w)))
-                      w))))
+(defun-sk exists-v-wfs (s u w)
+  (exists (v)
+    (^ (rel-> w v)
+       (rel-B u v))))
 
-(definec exists-v22 (u :s-bn w :s-fn) :s-fn
-  (cond
-     ((rel-skip-bn (f2b w) u) w)
-     ((^ (rel-broadcast-bn (f2b w) u)
-         (in (br-mssg-witness (f2b w) u)
-             (fn-pending-mssgs w)))
-      (forward-fn (find-forwarder w (br-mssg-witness (f2b w) u))
-                  (br-mssg-witness (f2b w) u)
-                  w))
-     
-     ((^ (rel-broadcast-bn (f2b w) u)
-         (! (in (br-mssg-witness (f2b w) u)
-                (fn-pending-mssgs w))))
-      (produce-fn (br-mssg-witness (f2b w) u) w))))
-
-(definec exists-v23 (u :s-bn w :s-fn) :s-fn
-  (cond
-     ((rel-join-bn (f2b w) u)
-      (b* ((ppsbn (bn-join-witness (f2b w) u))
-           (p (car ppsbn))
-           (pst (cdr ppsbn))
-           (pubs (mget :pubs pst))
-           (subs (mget :subs pst)))
-        (join-fn p pubs subs '() w)))
-
-     ((rel-leave-bn (f2b w) u)
-      (leave-fn (car (bn-join-witness u (f2b w))) w))))
-
-
-
-;; erankl function is a measure for the second case of our refinement
-;; proof, where (rel-B s v)
-
-;; The rank function
-(definec erankl (s u :borf) :nat
-  (b* (((unless (s-fnp s)) 0)
-       (m (br-mssg-witness
-           (f2b s)
-           (if (s-fnp u)
-               (f2b u)
-             u))))
-    (if m
-        (rankl m s)
-      0)))
-
-(definec rankl (m :mssg s :s-fn) :nat
-  (if (new-fn-mssgp m s)
-      (1+ (len s))
-    (m-nct m s)))
-
-(definec m-nct (m :mssg s :s-fn) :nat
-  (match s
-    (() 0)
-    (((& . pst) . rst)
-     (+ (if (! (in m (mget :seen pst)))
-            1
-          0)
-        (m-nct m rst)))))
-
-
-
-;; Finally, our refinement theorem, along with required conditions in
-;; the hypotheses.
-
-;; Currently working on cleaning up this thm, remove refinement conditions
-(property web3x (s u w :borf)
-  :check-contracts? nil
-
-  :h (^ (rel-B s w)
-        (rel-> s u)      
-
-        (=> (s-fnp s)
-            (f2b-refinement-conditions s
-                                       (br-mssg-witness (f2b s) (f2b u))
-                                       (car (bn-join-witness (f2b u)
-                                                             (f2b s))))))
-  (let ((v (exists-v s u w)))
-    (v (^ (rel-> w v)
-          (rel-B u v))
-       (^ (rel-> w v)
-          (rel-B s v)
-          (< (erankl v u)
-             (erankl w u))))))
-
+(defthm wfs3
+  (=> (^ (borfp s) (borfp w) (borfp u)
+         (rel-B s w)
+         (rel-> s u))
+      (exists-v-wfs s u w)))

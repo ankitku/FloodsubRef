@@ -1,5 +1,6 @@
 (in-package "ACL2S")
-(include-book "fn")
+(include-book "bn-trx")
+(include-book "fn-trx")
 
 (definecd f2b-st (ps :ps-fn ms :lom) :ps-bn
   (ps-bn (mget :pubs ps)
@@ -47,6 +48,7 @@
 ;; We now define our refinement map f2b
 (definec f2b-help (s :s-fn ms :lom) :s-bn
   :function-contract-hints (("Goal" :in-theory (enable
+                                                f2b-st-contract
                                                 acl2::maximal-records-theory)))
   (if (endp s)
       '()
@@ -66,7 +68,7 @@
   :h (new-fn-mssgp m s)
   (== (f2b-help s (insert-unique m ms))
       (f2b-help s ms))
-  :hints (("Goal" :in-theory (enable new-fn-mssgp f2b-st
+  :hints (("Goal" :in-theory (enable new-fn-mssgp
                                      acl2::maximal-records-theory))))
 
 (definec f2b (s :s-fn) :s-bn
@@ -154,11 +156,11 @@
   (mget p (f2b s)))
 
 ;; Danger, Should be disabled later
-(property prop=mget-f2b=mget (s :s-fn p :peer)
+(propertyd prop=mget-f2b=mget (s :s-fn p :peer)
   (iff (mget p s)
        (mget p (f2b s))))
 
-(property prop=not-mget=not-mget-f2b (s :s-fn p :peer)
+(propertyd prop=not-mget=not-mget-f2b (s :s-fn p :peer)
           (== (! (mget p s))
               (! (mget p (f2b s)))))
 
@@ -192,42 +194,80 @@
     :h (in m (fn-pending-mssgs s))
     (new-bn-mssgp m (f2b s)))
 
+  (local
+   (property h10 (w :s-fn x y :lom m :mssg)
+     :h (not (member-equal m x))
+     (== (new-bn-mssgp m (f2b-help w (union-set x y)))
+         (new-bn-mssgp m (f2b-help w y)))
+     :instructions
+     (:pro
+      (:induct (f2b-help w y)) :pro
+      (:casesplit (consp (f2b-help w (union-set x y))))
+      (:dv 1) (:r 3) :s
+      (= (cdr (f2b-help w (union-set x y)))
+         (f2b-help (cdr w) (union-set x y)))
+      (:claim (equal (new-bn-mssgp m (f2b-help (cdr w) (union-set x y)))
+                     (new-bn-mssgp m (f2b-help (cdr w) y))))
+      (= (new-bn-mssgp m (f2b-help (cdr w) (union-set x y)))
+         (new-bn-mssgp m (f2b-help (cdr w) y)))
 
-  (property h10 (w :s-fn x y :lom m :mssg)
-    :h (not (member-equal m x))
-    (== (new-bn-mssgp m (f2b-help w (union-set x y)))
-        (new-bn-mssgp m (f2b-help w y)))
+      (= (cdr (car (f2b-help w (union-set x y))))
+         (f2b-st (cdr (car w)) (union-set x y)))
+      (= (mget :seen (f2b-st (cdr (car w))(union-set x y)))
+         (set-difference-equal (mget :seen (cdr (car w)))
+                               (union-set x y))
+         :hints (("Goal" :use ((:instance prop=f2b-st-check
+                                          (ps (cdr (car w)))
+                                          (ms (union-set x y)))))))
+      (:claim (not (in m x)))
+      (= (in m (set-difference-equal (mget :seen (cdr (car w)))
+                                     (union-set x y)))
+         (in m (mget :seen (cdr (car (f2b-help w y)))))
+         :hints (("Goal" :use ((:instance prop=in-set-difference-union2
+                                          (z (mget :seen (cdr (car w)))))))))
+      :top
+      (:claim (consp (f2b-help w y)))
+      (:dv 2) (:r 2) :s :top :s
+      :bash :bash)))
+
+  (propertyd prop=f2b-cons (w :s-fn)
+    :h w
+    (f2b w))
+
+  (propertyd prop=new-fn-mssgp-def (w :s-fn m :mssg)
+    (== (new-fn-mssgp m w)
+        (^ (not (member-equal m (mget :seen (cdr (car w)))))
+           (not (member-equal m (mget :pending (cdr (car w)))))
+           (new-fn-mssgp m (cdr w))))
+    :hints (("Goal" :in-theory (enable new-fn-mssgp))))
+
+  (propertyd prop=demorgan (a b c :all)
+    (=> (not (and (not a) (not b) c))
+        (or a b (not c))))
+
+  (propertyd prop=!new-fn-mssgp-def (w :s-fn m :mssg)
+    (=> (! (new-fn-mssgp m w))
+        (or (member-equal m (mget :seen (cdr (car w))))
+            (member-equal m (mget :pending (cdr (car w))))
+            (not (new-fn-mssgp m (cdr w)))))
     :instructions
     (:pro
-     (:induct (f2b-help w y)) :pro
-     (:casesplit (consp (f2b-help w (union-set x y))))
-     (:dv 1) (:r 3) :s
-     (= (cdr (f2b-help w (union-set x y)))
-        (f2b-help (cdr w) (union-set x y)))
-     (:claim (equal (new-bn-mssgp m (f2b-help (cdr w) (union-set x y)))
-                    (new-bn-mssgp m (f2b-help (cdr w) y))))
-     (= (new-bn-mssgp m (f2b-help (cdr w) (union-set x y)))
-        (new-bn-mssgp m (f2b-help (cdr w) y)))
-
-     (= (cdr (car (f2b-help w (union-set x y))))
-        (f2b-st (cdr (car w)) (union-set x y)))
-     (= (mget :seen (f2b-st (cdr (car w))(union-set x y)))
-        (set-difference-equal (mget :seen (cdr (car w)))
-                              (union-set x y))
-        :hints (("Goal" :use ((:instance prop=f2b-st-check
-                                         (ps (cdr (car w)))
-                                         (ms (union-set x y)))))))
-     (:claim (not (in m x)))
-     (= (in m (set-difference-equal (mget :seen (cdr (car w)))
-                                    (union-set x y)))
-        (in m (mget :seen (cdr (car (f2b-help w y)))))
-        :hints (("Goal" :use ((:instance prop=in-set-difference-union2
-                                         (z (mget :seen (cdr (car w)))))))))
-     :top
-     (:claim (consp (f2b-help w y)))
-     (:dv 2) (:r 2) :s :top :s
-     :bash :bash))
-
+     (:claim (! (^ (not (member-equal m (mget :seen (cdr (car w)))))
+                   (not (member-equal m (mget :pending (cdr (car w)))))
+                   (new-fn-mssgp m (cdr w))))
+             :hints (("Goal" :use ((:instance prop=new-fn-mssgp-def)))))
+     (:claim (or (member-equal m (mget :seen (cdr (car w))))
+                 (member-equal m (mget :pending (cdr (car w))))
+                 (not (new-fn-mssgp m (cdr w))))
+             :hints (("Goal" :use
+                      ((:instance prop=demorgan
+                                  (a (member-equal m (mget :seen (cdr (car
+                                                                       w)))))
+                                  (b (member-equal m (mget :pending (cdr (car
+                                                                          w)))))
+                                  (c (new-fn-mssgp m (cdr w))))))))
+     (:demote 5) :s))
+  
   (property prop=new-bn-mssgp=>in-fn-pending (w :s-fn m :mssg)
     :h (^ (new-bn-mssgp m (f2b w))
           (! (new-fn-mssgp m w)))
@@ -235,62 +275,70 @@
     :instructions
     (:pro
      :induct :bash :pro
-     (:claim (== (new-fn-mssgp m w)
-                 (and (not (member-equal m (mget :seen (cdr (car w)))))
-                      (not (member-equal m (mget :pending (cdr (car w)))))
-                      (new-fn-mssgp m (cdr w))))
-             :hints (("Goal" :use ((:instance new-fn-mssgp-definition-rule
-                                              (s w))))))
      (:claim (or (member-equal m (mget :seen (cdr (car w))))
                  (member-equal m (mget :pending (cdr (car w))))
-                 (not (new-fn-mssgp m (cdr w)))))
-     
-     (:casesplit (member-equal m (mget :pending (cdr (car w)))))
-     (:claim (in m (mget :pending (cdr (car w)))))
-     (= (fn-pending-mssgs w)
-        (union-set (mget :pending (cdr (car w)))
-                   (fn-pending-mssgs (cdr w)))
-        :hints (("Goal" :use ((:instance fn-pending-mssgs-definition-rule
-                                         (s w))))))
-     (:prove :hints (("Goal" :use ((:instance in-union
-                                              (x (mget :pending (cdr (car w))))
-                                              (y (fn-pending-mssgs (cdr
-                                                                    w))))))))
+                 (not (new-fn-mssgp m (cdr w))))
+     :hints (("Goal" :use ((:instance prop=!new-fn-mssgp-def)))))
+    
+    (:casesplit (member-equal m (mget :pending (cdr (car w)))))
+    (:claim (in m (mget :pending (cdr (car w)))))
+    (= (fn-pending-mssgs w)
+       (union-set (mget :pending (cdr (car w)))
+                  (fn-pending-mssgs (cdr w)))
+       :hints (("Goal" :use ((:instance fn-pending-mssgs-definition-rule
+                                        (s w))))))
+    (:claim (tlp (mget :pending (cdr (car w)))))
+    (:prove :hints (("Goal" :use ((:instance in-union
+                                             (x (mget :pending (cdr (car w))))
+                                             (y (fn-pending-mssgs (cdr
+                                                                   w))))))))
 
      (:casesplit (in m (mget :seen (cdr (car w)))))
-     (:claim (consp (f2b w)))
+     (:claim w)
+     (:claim (f2b w)
+             :hints (("Goal" :use ((:instance prop=f2b-cons)))))
+
      (:demote 7)
-     (:dv 1) (:r 2) :s
-     (= (f2b-help w (fn-pending-mssgs w))
-        (f2b w))
-     (= (mget :seen (cdr (car (f2b w))))
-        (mget :seen (f2b-st (cdr (car w))
-                            (fn-pending-mssgs w))))
-     (= (mget :seen (f2b-st (cdr (car w))
-                            (fn-pending-mssgs w)))
-        (set-difference-equal (mget :seen (cdr (car w)))
-                              (fn-pending-mssgs w)))
-     :top :pro
+     (:dv 1) (:r new-bn-mssgp) :s
+     (= (f2b-help w (fn-pending-mssgs w)) (f2b w)
+        :hints (("Goal" :use ((:instance f2b-definition-rule (s w))))))
+     (= (cdr (car (f2b w)))
+        (f2b-st (cdr (car w)) (fn-pending-mssgs w))
+        :hints (("Goal" :use ((:instance prop=f2b-cdar (s w))))))
+     (:claim (ps-fnp (cdr (car w))))
+     (= (f2b-st (cdr (car w))
+                (fn-pending-mssgs w))
+        (ps-bn (mget :pubs (cdr (car w)))
+               (mget :subs (cdr (car w)))
+               (set-difference-equal (mget :seen (cdr (car w)))
+                                     (fn-pending-mssgs w)))
+        :hints (("Goal" :use ((:instance f2b-st-definition-rule
+                                         (ps (cdr (car w)))
+                                         (ms (fn-pending-mssgs w)))))))
+     :s :top :pro
+     
      (:claim (member-equal m (mget :seen (cdr (car w)))))
      (:claim (member-equal m (fn-pending-mssgs w)))
-     (:claim (in m (fn-pending-mssgs w)))
-     :s
+     (:prove :hints (("Goal" :use ((:instance prop=in-member (x (fn-pending-mssgs w)))))))
 
      (:claim (not (new-fn-mssgp m (cdr w))))
      (:claim (== (f2b (cdr w))
                  (f2b-help (cdr w) (fn-pending-mssgs (cdr w))))
              :hints (("Goal" :use ((:instance f2b-definition-rule
-                                              (s w))))))
-     ;(:claim (f2b-help (cdr w) (fn-pending-mssgs (cdr w))))
+                                              (s (cdr w)))))))
      (:demote 7) (:dv 1)
      (= (f2b w)
-        (f2b-help w (fn-pending-mssgs w)))
+        (f2b-help w (fn-pending-mssgs w))
+        :hints (("Goal" :use ((:instance f2b-definition-rule (s w))))))
+     
      (= (fn-pending-mssgs w)
         (union-set (mget :pending (cdr (car w)))
                    (fn-pending-mssgs (cdr w)))
         :hints (("Goal" :use ((:instance fn-pending-mssgs-definition-rule
                                          (s w))))))
      :top
+     (:claim (ps-fnp (cdr (car w))))
+     (:claim (lomp (mget :pending (cdr (car w)))))
      (= (new-bn-mssgp m
                        (f2b-help w
                                  (union-set (mget :pending (cdr (car w)))
@@ -299,7 +347,7 @@
         :hints (("Goal" :use ((:instance h10
                                          (x (mget :pending (cdr (car w))))
                                          (y (fn-pending-mssgs (cdr w))))))))
-     (:dv 1) (:r 3) :s :top :pro
+     (:dv 1) (:r new-bn-mssgp) :s :top :pro
      (:claim (in m (fn-pending-mssgs (cdr w))))
      (:claim (in m (union-set (fn-pending-mssgs (cdr w))
                               (mget :pending (cdr (car w)))))
@@ -319,8 +367,7 @@
         :hints (("Goal" :use ((:instance union-set-symm
                                          (x (mget :pending (cdr (car w))))
                                          (y (fn-pending-mssgs (cdr w))))))))
-     :s
-     :bash))
+     :s :bash))
     
   
   (property prop=new-mssg-fn-pending-mssgs (s :s-fn m :mssg)
@@ -340,7 +387,24 @@
      (:dv 1 2) (:r 2) :s :top :s
      :pro :bash))
 
-
+  (local
+   (property prop=new-bn-mssgp-cdr (m :mssg s :s-fn)
+     :h (^ (! (member-equal m (mget :pending (cdr (car s)))))
+           (new-bn-mssgp m (f2b-help (cdr s) (fn-pending-mssgs (cdr s)))))
+     (new-bn-mssgp m (f2b-help (cdr s) (fn-pending-mssgs s)))
+     :instructions
+     (:pro
+      (:claim (new-bn-mssgp m (f2b-help (cdr s)
+                                        (union-set (mget :pending (cdr (car s)))
+                                                   (fn-pending-mssgs (cdr s)))))
+              :hints (("Goal" :use ((:instance h10 (w (cdr s))
+                                               (x (mget :pending (cdr (car s))))
+                                               (y (fn-pending-mssgs (cdr
+                                                                     s))))))))
+      (:demote 5) (:dv 1 2 2)
+      (= (fn-pending-mssgs s))
+      :top :s)))
+  
   (property prop=f2b-broadcast-help (s :s-fn m :mssg)
     :h (new-fn-mssgp m s)
     (new-bn-mssgp m (f2b s))
@@ -363,21 +427,15 @@
      (:claim (! (member-equal m (mget :seen (f2b-st (cdr (car s))
                                                     (fn-pending-mssgs s))))))
      (:claim (! (member-equal m (mget :seen (cdr (car (f2b s)))))))
-     (:claim (not (in m
-                      (mget :seen (cdr (car (f2b-help s (fn-pending-mssgs s))))))))
+     (:claim (not
+              (in m (mget :seen
+                          (cdr (car (f2b-help s (fn-pending-mssgs s))))))))
 
 
      (:claim (new-bn-mssgp m (f2b-help (cdr s) (fn-pending-mssgs (cdr s)))))
-     (:claim (new-bn-mssgp m (f2b-help (cdr s)
-                                       (union-set (mget :pending (cdr (car
-                                                                       s)))
-                                                  (fn-pending-mssgs (cdr s))))))
-     (:claim (== (fn-pending-mssgs s)
-                 (union-set (mget :pending (cdr (car s)))
-                            (fn-pending-mssgs (cdr s))))
-             :hints (("Goal" :use ((:instance fn-pending-mssgs-definition-rule)))))
-
-     (:claim (new-bn-mssgp m (f2b-help (cdr s) (fn-pending-mssgs s))))
+     (:claim (new-bn-mssgp m (f2b-help (cdr s) (fn-pending-mssgs s)))
+             :hints (("Goal" :use ((:instance prop=new-bn-mssgp-cdr)))))
+             
      :s :pro :bash)))
 
 (property prop=f2b-broadcast-hyps (s :s-fn m :mssg)
@@ -390,7 +448,7 @@
   :instructions
   (:pro
    (:claim (mget (mget :or m) (f2b s)))
-   :bash))
+   :s))
            
 
 (propertyd prop=f2b-produce-hyps (s :s-fn m :mssg)
@@ -399,7 +457,8 @@
             (mget :pubs (mget (mget :or m) (f2b s)))))
   (^ (mget (mget :or m) s)
      (in (mget :tp m)
-         (mget :pubs (mget (mget :or m) s)))))
+         (mget :pubs (mget (mget :or m) s))))
+  :hints (("Goal" :in-theory (enable prop=mget-f2b=mget))))
 
 
 ;;===== PRODUCE - F2B =========                          
@@ -803,110 +862,12 @@
 (property prop=forward-fn (p :peer m :mssg s :s-fn)
   :h (^ (mget p s)
         (in m (mget :pending (mget p s)))
-        (! (in m (mget :seen (mget p s))))
         ;; (B s u)
         (== (fn-pending-mssgs (forward-fn p m s))
             (fn-pending-mssgs s)))
   (== (f2b (forward-fn p m s))
       (f2b s))
   :hints (("Goal" :in-theory (enable forward-fn f2b))))
-
-
-;; (in-theory (enable f2b f2b-definition-rule forward-fn forward-fn-definition-rule
-;;                    f2b-help f2b-help-definition-rule prop=mget-f2b=mget
-;;                    fn-pending-mssgs fn-pending-mssgs-definition-rule))
-
-;; (property prop=forward-broadcast (p :peer m :mssg s :s-fn ms :lom)
-;;   :h (^ (mget p s)
-;;         (in m (mget :pending (mget p s)))
-;;         (! (in m (mget :seen (mget p s))))
-;;         (! (in m ms))
-
-;;         (=> (^ (! (new-fn-mssgp m s))
-;;                (! (in m (fn-pending-mssgs s))))
-;;             (== (f2b s)
-;;                 (broadcast m (f2b s))))
-;;         )
-  
-  
-;;   (equal (f2b-help (update-forwarder-fn p m s) ms)
-;;          (broadcast m (f2b s))))
-
-;; TODO
-;; Prove
-
-;; (equal (f2b-help (update-forwarder-fn p m s)
-;;                  (remove-equal m (fn-pending-mssgs s)))
-;;        (broadcast m (f2b s)))
-
-
-;; (property prop=forward-fn2 (p :peer m :mssg s :s-fn)
-;;   :check-contracts? nil
-;;   :h (^ (mget p s)
-;;         (in m (mget :pending (mget p s)))
-;;         (! (in m (mget :seen (mget p s))))
-;;         (== (fn-pending-mssgs (forward-fn p m s))
-;;             (remove-equal m (fn-pending-mssgs s)))
-        
-;;         (mget (mget :or m) s)
-;;         (in (mget :tp m)
-;;             (mget :pubs (mget  (mget :or m) s)))
-
-;;         ;;Condition
-;;         (=> (^ (! (in m (fn-pending-mssgs (forward-fn p m s))))
-;;                (! (new-fn-mssgp m (forward-fn p m s))))
-;;             (broadcastedp m (forward-fn p m s)))
-
-
-;;         )
-;;   (== (f2b (forward-fn p m s))
-;;       (broadcast m (f2b s)))
-;;   :instructions
-;;   (:pro
-;;    (= (f2b (forward-fn p m s))
-;;       (f2b-help (forward-fn p m s)
-;;                 (fn-pending-mssgs (forward-fn p m s))))
-;;    (= (fn-pending-mssgs (forward-fn p m s))
-;;       (remove-equal m (fn-pending-mssgs s)))
-;;    (= (forward-fn p m s)
-;;       (forward-help-fn (update-forwarder-fn p m s)
-;;                        (mget (mget :tp m)
-;;                              (mget :nsubs (mget p s)))
-;;                        m))
-;;    (= (f2b-help (forward-help-fn (update-forwarder-fn p m s)
-;;                                  (mget (mget :tp m)
-;;                                        (mget :nsubs (mget p s)))
-;;                                  m)
-;;                 (remove-equal m (fn-pending-mssgs s)))
-;;       (f2b-help (update-forwarder-fn p m s)
-;;                 (remove-equal m (fn-pending-mssgs s))))
-
-;;    (:claim (in m (fn-pending-mssgs s)))
-;;    (:claim (new-bn-mssgp m (f2b s)))
-
-;;    (:claim (! (in m (remove-equal m (fn-pending-mssgs s))))
-;;            :hints (("Goal" :use ((:instance not-in-rem
-;;                                             (x (fn-pending-mssgs s)))))))
-   
-;;    (:claim (! (in m (fn-pending-mssgs (forward-fn p m s)))))
-
-;;    (:claim (^ (mget (mget :or m) (f2b s))
-;;               (in (mget :tp m)
-;;                   (mget :pubs (mget (mget :or m) (f2b s))))))
-
-;;    (:claim (in m (mget :seen (mget p (update-forwarder-fn p m s)))))
-
-;;    (:claim (! (new-fn-mssgp m (update-forwarder-fn p m s))))
-   
-   
-
-   
-;;    ))
-  
-
-
-
-
 
 
 (in-theory (disable prop=mget-f2b=mget f2b f2b-definition-rule
@@ -916,304 +877,1548 @@
 
 ;;------------------ RANK FUNCTION AND RELATED PROPERTIES -----------------------------
 
-(definec m-nct (m :mssg s :s-fn) :nat
-  (match s
-    (() 0)
-    (((& . pst) . rst)
-     (+ (if (! (in m (mget :seen pst)))
-            1
-          0)
-        (m-nct m rst)))))
+;; (definec m-nct (m :mssg s :s-fn) :nat
+;;   (match s
+;;     (() 0)
+;;     (((& . pst) . rst)
+;;      (+ (if (! (in m (mget :seen pst)))
+;;             1
+;;           0)
+;;         (m-nct m rst)))))
 
-(property prop=m-nct-upper-bound (m :mssg s :s-fn)
-  (<= (m-nct m s)
-      (len s)))
+;; (property prop=m-nct-upper-bound (m :mssg s :s-fn)
+;;   (<= (m-nct m s)
+;;       (len s)))
 
-(definec rankl (m :mssg s :s-fn) :nat
-  (if (new-fn-mssgp m s)
-      (1+ (len s))
-    (m-nct m s)))
+;; (definec rankl (m :mssg s :s-fn) :nat
+;;   (if (new-fn-mssgp m s)
+;;       (1+ (len s))
+;;     (m-nct m s)))
 
-(property prop=f2b-update-forwarder-rank (p :peer m :mssg s :s-fn ms :lom)
-  :h (^ (mget p s)
-        (in m (mget :pending (mget p s)))
-        (! (in m (mget :seen (mget p s)))))
-    (< (m-nct m (update-forwarder-fn p m s))
-       (m-nct m s))
-  :instructions
-  (:pro
-   (:induct (tlp s)) :bash :pro
+;; (property prop=f2b-update-forwarder-rank (p :peer m :mssg s :s-fn ms :lom)
+;;   :h (^ (mget p s)
+;;         (in m (mget :pending (mget p s)))
+;;         (! (in m (mget :seen (mget p s)))))
+;;     (< (m-nct m (update-forwarder-fn p m s))
+;;        (m-nct m s))
+;;   :instructions
+;;   (:pro
+;;    (:induct (tlp s)) :bash :pro
    
-   (:casesplit (== (car (car s)) p))
-   (:dv 1 2) (:r 2) :s :up :r :s
-   (= (forwarder-new-pst (cdr (car s)) m)
-      (mset :pending
-            (remove-equal m (mget :pending (cdr (car s))))
-            (mset :seen
-                  (insert-unique m (mget :seen (cdr (car s))))
-                  (cdr (car s))))
-      :hints (("Goal" :in-theory (enable forwarder-new-pst))))
-   (:claim (in m (mget :seen (forwarder-new-pst (cdr (car s)) m)))
-           :hints (("Goal" :in-theory (enable forwarder-new-pst))))
-   (:claim (in m (insert-unique m (mget :seen (cdr (car s))))))
-   :s :up
-   (= (m-nct m s)
-      (+ 1 (m-nct m (cdr s))))
-   :s :bash
-   (= (cons (cons p (forwarder-new-pst (cdr (car s)) m))
-            (cdr s))
-      (update-forwarder-fn p m s))
-   :bash
+;;    (:casesplit (== (car (car s)) p))
+;;    (:dv 1 2) (:r 2) :s :up :r :s
+;;    (= (forwarder-new-pst (cdr (car s)) m)
+;;       (mset :pending
+;;             (remove-equal m (mget :pending (cdr (car s))))
+;;             (mset :seen
+;;                   (insert-unique m (mget :seen (cdr (car s))))
+;;                   (cdr (car s))))
+;;       :hints (("Goal" :in-theory (enable forwarder-new-pst))))
+;;    (:claim (in m (mget :seen (forwarder-new-pst (cdr (car s)) m)))
+;;            :hints (("Goal" :in-theory (enable forwarder-new-pst))))
+;;    (:claim (in m (insert-unique m (mget :seen (cdr (car s))))))
+;;    :s :up
+;;    (= (m-nct m s)
+;;       (+ 1 (m-nct m (cdr s))))
+;;    :s :bash
+;;    (= (cons (cons p (forwarder-new-pst (cdr (car s)) m))
+;;             (cdr s))
+;;       (update-forwarder-fn p m s))
+;;    :bash
 
-   (:claim (mget p (cdr s))
-           :hints (("Goal" :use ((:instance prop=mget-cdr)))))
-   (:claim (== (mget p s) (mget p (cdr s)))
-           :hints (("Goal" :in-theory (enable acl2::maximal-records-theory))))
-   (:claim (! (in m (mget :seen (mget p (cdr s))))))
-   (:claim (< (m-nct m (update-forwarder-fn p m (cdr s)))
-              (m-nct m (cdr s))))
+;;    (:claim (mget p (cdr s))
+;;            :hints (("Goal" :use ((:instance prop=mget-cdr)))))
+;;    (:claim (== (mget p s) (mget p (cdr s)))
+;;            :hints (("Goal" :in-theory (enable acl2::maximal-records-theory))))
+;;    (:claim (! (in m (mget :seen (mget p (cdr s))))))
+;;    (:claim (< (m-nct m (update-forwarder-fn p m (cdr s)))
+;;               (m-nct m (cdr s))))
 
 
-   (:dv 1 2) (:r 2) :s :top
-   (= (m-nct m s)
-      (m-nct m (cons (car s) (cdr s))))
-   (:dv 1) :r :s :up (:dv 2) :r :s :up
-   (:casesplit (in m (mget :seen (cdr (car s)))))
-   :s :s :bash :bash
-   (= (cons (car s)
-            (update-forwarder-fn p m (cdr s)))
-      (update-forwarder-fn p m s))
-   :bash))
+;;    (:dv 1 2) (:r 2) :s :top
+;;    (= (m-nct m s)
+;;       (m-nct m (cons (car s) (cdr s))))
+;;    (:dv 1) :r :s :up (:dv 2) :r :s :up
+;;    (:casesplit (in m (mget :seen (cdr (car s)))))
+;;    :s :s :bash :bash
+;;    (= (cons (car s)
+;;             (update-forwarder-fn p m (cdr s)))
+;;       (update-forwarder-fn p m s))
+;;    :bash))
 
-(property prop=forward-help-fn-rank (p :peer s :s-fn m :mssg nbrs :lop)
-  (= (m-nct m (forward-help-fn s nbrs m))
-     (m-nct m s))
-  :instructions
-  (:pro
-   :induct :bash :pro
+;; (property prop=forward-help-fn-rank (p :peer s :s-fn m :mssg nbrs :lop)
+;;   (= (m-nct m (forward-help-fn s nbrs m))
+;;      (m-nct m s))
+;;   :instructions
+;;   (:pro
+;;    :induct :bash :pro
 
    
-   (:dv 1 2) (:r 2) :s :up
-   :r :s
-   (= (m-nct m (forward-help-fn (cdr s) nbrs m))
-      (m-nct m (cdr s)))
+;;    (:dv 1 2) (:r 2) :s :up
+;;    :r :s
+;;    (= (m-nct m (forward-help-fn (cdr s) nbrs m))
+;;       (m-nct m (cdr s)))
    
 
-   :top
-   (= (mget :seen (add-pending-psfn m (cdr (car s))))
-      (mget :seen (cdr (car s))))
-   (:casesplit (in (car (car s)) nbrs))
-   :s :bash :bash
-   (= (if (in (car (car s)) nbrs)
-           (cons (cons (car (car s))
-                       (add-pending-psfn m (cdr (car s))))
-                 (forward-help-fn (cdr s) nbrs m))
-         (cons (car s)
-               (forward-help-fn (cdr s) nbrs m)))
-      (forward-help-fn s nbrs m)
-      :hints (("Goal" :in-theory (enable forward-help-fn))))
-   :s
+;;    :top
+;;    (= (mget :seen (add-pending-psfn m (cdr (car s))))
+;;       (mget :seen (cdr (car s))))
+;;    (:casesplit (in (car (car s)) nbrs))
+;;    :s :bash :bash
+;;    (= (if (in (car (car s)) nbrs)
+;;            (cons (cons (car (car s))
+;;                        (add-pending-psfn m (cdr (car s))))
+;;                  (forward-help-fn (cdr s) nbrs m))
+;;          (cons (car s)
+;;                (forward-help-fn (cdr s) nbrs m)))
+;;       (forward-help-fn s nbrs m)
+;;       :hints (("Goal" :in-theory (enable forward-help-fn))))
+;;    :s
 
-   :pro
-   (= (forward-help-fn s nbrs m)
-      nil
-      :hints (("Goal" :in-theory (enable forward-help-fn))))
-   :s))
+;;    :pro
+;;    (= (forward-help-fn s nbrs m)
+;;       nil
+;;       :hints (("Goal" :in-theory (enable forward-help-fn))))
+;;    :s))
 
-(encapsulate ()
+;; (encapsulate ()
   
-  (local
-   (property prop=m-nct-notin-car (m :mssg s :s-fn)
-     :h (^ s
-           (not (in m (mget :seen (cdr (car s))))))
-     (< (m-nct m (cdr s))
-        (m-nct m s))))
+;;   (local
+;;    (property prop=m-nct-notin-car (m :mssg s :s-fn)
+;;      :h (^ s
+;;            (not (in m (mget :seen (cdr (car s))))))
+;;      (< (m-nct m (cdr s))
+;;         (m-nct m s))))
 
-  (local
-   (property prop=m-nct-cdr-in-car (m :mssg s :s-fn)
-     :h (^ s
-           (in m (mget :seen (cdr (car s)))))
-     (= (m-nct m (cdr s))
-        (m-nct m s))))
+;;   (local
+;;    (property prop=m-nct-cdr-in-car (m :mssg s :s-fn)
+;;      :h (^ s
+;;            (in m (mget :seen (cdr (car s)))))
+;;      (= (m-nct m (cdr s))
+;;         (m-nct m s))))
 
-  (local
-   (in-theory (enable acl2::maximal-records-theory)))
+;;   (local
+;;    (in-theory (enable acl2::maximal-records-theory)))
 
-  (property prop=m-nct-mset-add-pending (p :peer s :s-fn m :mssg)
-    :h (^ (mget p s)
-          (! (in m (mget :seen (mget p s)))))
-    (= (m-nct m (mset p (add-pending-psfn m (mget p s)) s))
-       (m-nct m s))
-    :instructions
-    (:pro
-     :induct :bash
-     :pro
-     (:casesplit (== p (car (car s))))
-     (= (mget p s) (cdr (car s)))
-     (:dv 1 2) :r
-     (:claim (consp (add-pending-psfn m (cdr (car s)))))
-     :s :up
-     (:claim (! (in m (mget :seen (add-pending-psfn m (cdr (car s)))))))
-     :r
-     (:claim (consp (cons (cons p (add-pending-psfn m (cdr (car s))))
-                          (cdr s))))
-     (:claim (consp (car (cons (cons p (add-pending-psfn m (cdr (car s))))
-                               (cdr s)))))
-     :s :top :bash :bash
+;;   (property prop=m-nct-mset-add-pending (p :peer s :s-fn m :mssg)
+;;     :h (^ (mget p s)
+;;           (! (in m (mget :seen (mget p s)))))
+;;     (= (m-nct m (mset p (add-pending-psfn m (mget p s)) s))
+;;        (m-nct m s))
+;;     :instructions
+;;     (:pro
+;;      :induct :bash
+;;      :pro
+;;      (:casesplit (== p (car (car s))))
+;;      (= (mget p s) (cdr (car s)))
+;;      (:dv 1 2) :r
+;;      (:claim (consp (add-pending-psfn m (cdr (car s)))))
+;;      :s :up
+;;      (:claim (! (in m (mget :seen (add-pending-psfn m (cdr (car s)))))))
+;;      :r
+;;      (:claim (consp (cons (cons p (add-pending-psfn m (cdr (car s))))
+;;                           (cdr s))))
+;;      (:claim (consp (car (cons (cons p (add-pending-psfn m (cdr (car s))))
+;;                                (cdr s)))))
+;;      :s :top :bash :bash
 
-     (:claim (mget p (cdr s)))
-     (:claim (! (in m (mget :seen (mget p (cdr s))))))
-     (:claim (= (m-nct m
-                       (mset p (add-pending-psfn m (mget p (cdr s)))
-                             (cdr s)))
-                (m-nct m (cdr s))))
-     (:dv 1 2) :r (:claim s)
-     (:claim (! (lexorder p (car (car s))))) :s :up :r :s
-     (:casesplit (in m (mget :seen (cdr (car s))))) :s
-     :top
-     (= (m-nct m s) (m-nct m (cdr s))) :s
-     (= (m-nct m s) (m-nct m (cdr s))) :s
+;;      (:claim (mget p (cdr s)))
+;;      (:claim (! (in m (mget :seen (mget p (cdr s))))))
+;;      (:claim (= (m-nct m
+;;                        (mset p (add-pending-psfn m (mget p (cdr s)))
+;;                              (cdr s)))
+;;                 (m-nct m (cdr s))))
+;;      (:dv 1 2) :r (:claim s)
+;;      (:claim (! (lexorder p (car (car s))))) :s :up :r :s
+;;      (:casesplit (in m (mget :seen (cdr (car s))))) :s
+;;      :top
+;;      (= (m-nct m s) (m-nct m (cdr s))) :s
+;;      (= (m-nct m s) (m-nct m (cdr s))) :s
      
-     (= (mget p s) (mget p (cdr s)))
-     (= (m-nct m s) (m-nct m (cdr s))) :s
-     :top :s :bash :bash :pro :bash))
-  
-  (local 
-   (property prop=in-member (x :tl m :all)
-     (iff (in m x)
-          (member-equal m x))))
-
-  (local
-   (in-theory (enable new-fn-mssgp)))
-
-  (property prop=new-fn-mssgp1 (p :peer m :mssg s :s-fn)
-    :h (^ (mget p s)
-          (in m (mget :pending (mget p s))))
-    (! (new-fn-mssgp m s)))
-  
-  (property prop=new-fn-mssgp2 (p :peer m :mssg s :s-fn)
-    :h (^ (mget p s)
-          (in m (mget :seen (mget p s))))
-    (! (new-fn-mssgp m s)))
-
-  (property prop=new-fn-mssgp-produce-fn (p :peer m :mssg s :s-fn)
-    :h (^ (mget (mget :or m) s)
-          (new-fn-mssgp m s)
-          (in (mget :tp m)
-              (mget :pubs (mget  (mget :or m) s))))
-    (! (new-fn-mssgp m (produce-fn m s)))
-    :instructions
-    (:pro
-     (:dv 1 2) (:r 2) :s :top
-     (:claim (! (in m (mget :pending (mget (mget :or m) s)))))
-     (:claim (! (in m (mget :seen (mget (mget :or m) s)))))
-     (:claim (! (member-equal m (mget :pending (mget (mget :or m) s)))))
-     (:claim (! (member-equal m (mget :seen (mget (mget :or m) s)))))
-     (:claim (in m (mget :pending (add-pending-psfn m (mget (mget :or m) s))))
-             :hints (("Goal" :use ((:instance prop=add-pending-psfn-pending
-                                      (pst (mget (mget :or m) s)))))))
-     :bash))
-
- (local
-  (property prop=forwarder-new-pst-m (p :peer m :mssg s :s-fn)
-    :h (mget p s)
-    (in m (mget :seen (forwarder-new-pst (mget p s) m)))
-    :instructions
-    (:pro (:dv 2 2) :r :up :s :up (:r 4))))
-
- (property prop=forward-fn-peer-state (p :peer m :mssg s :s-fn)
-   :h (^ (mget p s)
-         (in m (mget :pending (mget p s)))
-         (not (in m (mget :seen (mget p s))))
-         (not (in p (mget (mget :tp m)
-                          (mget :nsubs (mget p s))))))
-   (== (mget p (forward-fn p m s))
-       (forwarder-new-pst (mget p s) m))
-   :hints (("Goal" :in-theory (enable forward-fn
-                                      forward-help-fn))))
-
-  (property prop=new-fn-mssgp-forward-fn (p :peer m :mssg s :s-fn)
-    :h (^ (mget p s)
-          (in m (mget :pending (mget p s)))
-          (not (in m (mget :seen (mget p s))))
-          (not (in p (mget (mget :tp m)
-                           (mget :nsubs (mget p s))))))
-    (! (new-fn-mssgp m (forward-fn p m s)))
-    :instructions
-    (:pro
-     (:claim (== (mget p (forward-fn p m s))
-                 (forwarder-new-pst (mget p s) m))
-             :hints (("Goal" :use (prop=forward-fn-peer-state))))
-     (:claim (in m (mget :seen (forwarder-new-pst (mget p s) m)))
-             :hints (("Goal" :use (prop=forwarder-new-pst-m))))
-     (:prove :hints (("Goal" :use ((:instance prop=new-fn-mssgp2
-                                              (s (forward-fn p m s)))))))))
+;;      (= (mget p s) (mget p (cdr s)))
+;;      (= (m-nct m s) (m-nct m (cdr s))) :s
+;;      :top :s :bash :bash :pro :bash))
 
 
-  (property prop=forward-fn-rank (p :peer m :mssg s :s-fn)
-    :h (^ (mget p s)
-          (in m (mget :pending (mget p s)))
-          (! (in m (mget :seen (mget p s))))
-          (not (in p (mget (mget :tp m)
-                           (mget :nsubs (mget p s))))))
-    (< (rankl m (forward-fn p m s))
-       (rankl m s))
-    :instructions
-    (:pro
-     (:claim (! (new-fn-mssgp m (forward-fn p m s)))
-             :hints (("Goal" :use prop=new-fn-mssgp-forward-fn)))
-     :bash
-     (:dv 1 2) (:r 2) :s :top
-     (= (m-nct m (forward-help-fn (update-forwarder-fn p m s)
-                                  (mget (mget :tp m)
-                                        (mget :nsubs (mget p s)))
-                                  m))
-        (m-nct m (update-forwarder-fn p m s))
-        :hints (("Goal" :use ((:instance prop=forward-help-fn-rank
-                                         (s (update-forwarder-fn p m s))
-                                         (nbrs (mget (mget :tp m)
-                                                     (mget :nsubs (mget p
-                                                                        s)))))))))
-     (:prove :hints (("Goal" :use (prop=f2b-update-forwarder-rank)))))))
+;;   (property prop=new-fn-mssgp-produce-fn (p :peer m :mssg s :s-fn)
+;;     :h (^ (mget (mget :or m) s)
+;;           (new-fn-mssgp m s)
+;;           (in (mget :tp m)
+;;               (mget :pubs (mget  (mget :or m) s))))
+;;     (! (new-fn-mssgp m (produce-fn m s)))
+;;     :instructions
+;;     (:pro
+;;      (:dv 1 2) (:r 2) :s :top
+;;      (:claim (! (in m (mget :pending (mget (mget :or m) s)))))
+;;      (:claim (! (in m (mget :seen (mget (mget :or m) s)))))
+;;      (:claim (! (member-equal m (mget :pending (mget (mget :or m) s)))))
+;;      (:claim (! (member-equal m (mget :seen (mget (mget :or m) s)))))
+;;      (:claim (in m (mget :pending (add-pending-psfn m (mget (mget :or m) s))))
+;;              :hints (("Goal" :use ((:instance prop=add-pending-psfn-pending
+;;                                       (pst (mget (mget :or m) s)))))))
+;;      :bash))
+
+;;  (local
+;;   (property prop=forwarder-new-pst-m (p :peer m :mssg s :s-fn)
+;;     :h (mget p s)
+;;     (in m (mget :seen (forwarder-new-pst (mget p s) m)))
+;;     :instructions
+;;     (:pro (:dv 2 2) :r :up :s :up (:r 4))))
+
+;;  (property prop=forward-fn-peer-state (p :peer m :mssg s :s-fn)
+;;    :h (^ (mget p s)
+;;          (in m (mget :pending (mget p s)))
+;;          (not (in m (mget :seen (mget p s))))
+;;          (not (in p (mget (mget :tp m)
+;;                           (mget :nsubs (mget p s))))))
+;;    (== (mget p (forward-fn p m s))
+;;        (forwarder-new-pst (mget p s) m))
+;;    :hints (("Goal" :in-theory (enable forward-fn
+;;                                       forward-help-fn))))
+
+;;   (property prop=new-fn-mssgp-forward-fn (p :peer m :mssg s :s-fn)
+;;     :h (^ (mget p s)
+;;           (in m (mget :pending (mget p s)))
+;;           (not (in m (mget :seen (mget p s))))
+;;           (not (in p (mget (mget :tp m)
+;;                            (mget :nsubs (mget p s))))))
+;;     (! (new-fn-mssgp m (forward-fn p m s)))
+;;     :instructions
+;;     (:pro
+;;      (:claim (== (mget p (forward-fn p m s))
+;;                  (forwarder-new-pst (mget p s) m))
+;;              :hints (("Goal" :use (prop=forward-fn-peer-state))))
+;;      (:claim (in m (mget :seen (forwarder-new-pst (mget p s) m)))
+;;              :hints (("Goal" :use (prop=forwarder-new-pst-m))))
+;;      (:prove :hints (("Goal" :use ((:instance prop=new-fn-mssgp2
+;;                                               (s (forward-fn p m s)))))))))
+
+
+;;   (property prop=forward-fn-rank (p :peer m :mssg s :s-fn)
+;;     :h (^ (mget p s)
+;;           (in m (mget :pending (mget p s)))
+;;           (! (in m (mget :seen (mget p s))))
+;;           (not (in p (mget (mget :tp m)
+;;                            (mget :nsubs (mget p s))))))
+;;     (< (rankl m (forward-fn p m s))
+;;        (rankl m s))
+;;     :instructions
+;;     (:pro
+;;      (:claim (! (new-fn-mssgp m (forward-fn p m s)))
+;;              :hints (("Goal" :use prop=new-fn-mssgp-forward-fn)))
+;;      :bash
+;;      (:dv 1 2) (:r 2) :s :top
+;;      (= (m-nct m (forward-help-fn (update-forwarder-fn p m s)
+;;                                   (mget (mget :tp m)
+;;                                         (mget :nsubs (mget p s)))
+;;                                   m))
+;;         (m-nct m (update-forwarder-fn p m s))
+;;         :hints (("Goal" :use ((:instance prop=forward-help-fn-rank
+;;                                          (s (update-forwarder-fn p m s))
+;;                                          (nbrs (mget (mget :tp m)
+;;                                                      (mget :nsubs (mget p
+;;                                                                         s)))))))))
+;;      (:prove :hints (("Goal" :use (prop=f2b-update-forwarder-rank)))))))
               
 
-(property prop=produce-fn-rank (m :mssg s :s-fn)
-  :h (^ (mget (mget :or m) s)
-        (new-fn-mssgp m s)
-        (in (mget :tp m)
-            (mget :pubs (mget  (mget :or m) s))))
-  (< (rankl m (produce-fn m s))
-     (rankl m s))
-  :instructions
-  (:pro
-   (:dv 1) (:r 2) :s (:dv 2) (:r 2) :s :up
-   (:claim (! (in m (mget :seen (mget (mget :or m) s)))))
-   :r :top
-   (:claim (<= (m-nct m s) (len s)))
-   (:dv 2) :r :s :up :bash))
+;; (property prop=produce-fn-rank (m :mssg s :s-fn)
+;;   :h (^ (mget (mget :or m) s)
+;;         (new-fn-mssgp m s)
+;;         (in (mget :tp m)
+;;             (mget :pubs (mget  (mget :or m) s))))
+;;   (< (rankl m (produce-fn m s))
+;;      (rankl m s))
+;;   :instructions
+;;   (:pro
+;;    (:dv 1) (:r 2) :s (:dv 2) (:r 2) :s :up
+;;    (:claim (! (in m (mget :seen (mget (mget :or m) s)))))
+;;    :r :top
+;;    (:claim (<= (m-nct m s) (len s)))
+;;    (:dv 2) :r :s :up :bash))
 
 
 (in-theory (disable f2b f2b-definition-rule forward-fn forward-fn-definition-rule
-                    f2b-help f2b-help-definition-rule
                     fn-pending-mssgs fn-pending-mssgs-definition-rule))
 
-(defdata maybe-mssg (v nil mssg))
 
-(property prop=cadr-sbn (s :s-bn)
-  :h (consp s)
-  (ps-bnp (cdar s))
-  :hints (("Goal" :in-theory (enable s-bnp))))
 
-(property prop=lomp-seen-diff-bn (pst qst :ps-bn)
+(property prop=f2b-helper-def (ms :lom s :s-fn)
   :check-contracts? nil
-  :h (set-difference-equal (mget :seen qst) (mget :seen pst))
-  (mssgp (car (set-difference-equal (mget :seen qst) (mget :seen pst))))
-  :hints (("Goal" :in-theory (enable ps-bnp))))
+  :h s
+  (== (f2b-help s ms)
+      (cons (cons (caar s)
+                  (f2b-st (cdar s) ms))
+            (f2b-help (cdr s) ms)))
+  :hints (("Goal" :in-theory (enable f2b-help))))
 
-(definec br-mssg-witness (s u :s-bn) :maybe-mssg
-  :function-contract-hints (("Goal" :in-theory (enable s-bnp ps-bnp)))
-  (cond
-   ((v (endp s) (endp u)) nil)
-   ((== (car s) (car u)) (br-mssg-witness (cdr s) (cdr u)))
-   (t (car (set-difference-equal (mget :seen (cdar u))
-                                 (mget :seen (cdar s)))))))
+(propertyd prop=f2b-helper-caar (ms :lom s :s-fn)
+  :check-contracts? nil
+  :h s
+  (equal (car (car (f2b-help s ms)))
+         (car (car s)))
+  :hints (("Goal" :use ((:instance prop=f2b-helper-def)))))
+
+
+(propertyd prop=f2b-helper-cdar (ms :lom s :s-fn)
+  :check-contracts? nil
+  :h s
+  (== (cdr (car (f2b-help s ms)))
+      (f2b-st (cdr (car s)) ms))
+  :hints (("Goal" :use ((:instance prop=f2b-helper-def)))))
+  
+
+
+
+(definec brd-receivers (m :mssg s :s-fn) :lop
+  (match s
+    (() ())
+    (((p . pst) . rst)
+     (if (in m (mget :seen pst))
+         (cons p (brd-receivers m rst))
+       (brd-receivers m rst)))))
+
+(encapsulate ()
+  (local
+   (in-theory (enable acl2::maximal-records-theory)))
+  
+  (local
+   (property prop=xx (s :s-fn)
+     :h (^ s (cdr s))
+     (<< (car (car s))
+         (car (car (cdr s))))))
+
+  (local
+   (property prop=<<-transitive (a b c :all)
+     :h (^ (<< a b) (<< b c))
+     (<< a c)))
+  
+  (local
+   (property prop=p-!in-brd-receivers (p :peer m :mssg s :s-fn)
+     :h (<< p (car (car s)))
+     (! (in p (brd-receivers m s)))
+     :instructions
+     (:pro :induct :bash
+           :pro
+           (:casesplit (endp (cdr s))) :bash
+           
+           (:claim (<< (car (car s))
+                       (car (cadr s)))
+                   :hints (("Goal" :use ((:instance
+                                          prop=xx)))))
+           (:claim (<< p (car (cadr s)))
+                   :hints (("Goal" :use ((:instance prop=<<-transitive
+                                                    (a p)
+                                                    (b (car (car s)))
+                                                    (c (car (cadr s))))))))
+           (:claim (s-fnp (cdr s)))
+           (:claim (not (in p (brd-receivers m (cdr s)))))
+           (:dv 1 2) (:r brd-receivers) :s :top :s
+
+           :pro
+           (:casesplit (endp (cdr s))) :bash
+           
+           (:claim (<< (car (car s))
+                       (car (cadr s)))
+                   :hints (("Goal" :use ((:instance
+                                          prop=xx)))))
+           (:claim (<< p (car (cadr s)))
+                   :hints (("Goal" :use ((:instance prop=<<-transitive
+                                                    (a p)
+                                                    (b (car (car s)))
+                                                    (c (car (cadr s))))))))
+           (:claim (s-fnp (cdr s)))
+           (:claim (not (in p (brd-receivers m (cdr s)))))
+           (:dv 1 2) (:r brd-receivers) :s :up (:r in) :s
+           :bash)))
+
+  (property prop=caars-!in-brd-receivers-cdrs (m :mssg s :s-fn)
+    :h s
+    (! (in (car (car s)) (brd-receivers m (cdr s))))
+    :hints (("Goal" :use ((:instance prop=p-!in-brd-receivers
+                                     (p (car (car s)))
+                                     (s (cdr s)))))))
+
+
+  (local
+   (property prop=m-in-brd-receivers-help (m :mssg s :s-fn)
+     :h s
+     (!= (car (car s))
+         (car (brd-receivers m (cdr s))))
+     :instructions
+     (:pro
+      (:claim (! (in (car (car s)) (brd-receivers m (cdr s))))
+              :hints (("Goal" :use ((:instance
+                                     prop=caars-!in-brd-receivers-cdrs)))))
+      (:demote 4) (:dv 1 1) (:r in) :s :top :bash)))
+
+  (property prop=m-in-brd-receivers (m :mssg s :s-fn)
+    :h s
+    (==
+     (== (car (car s))
+         (car (brd-receivers m s)))
+     (in m (mget :seen (cdar s))))
+    :hints (("Goal"
+             :use ((:instance prop=m-in-brd-receivers-help)))))
+
+  (local
+   (property prop=car-in-tl (xs :tl)
+     :h xs
+     (in (car xs) xs)))
+  
+  (propertyd prop=mget-car-brd-receivers (m :mssg s :s-fn)
+    :h (brd-receivers m s)
+    (mget (car (brd-receivers m s)) s)
+    :instructions
+    (:pro
+     (:claim s)
+     :induct :bash
+     :pro
+     (:claim (! (<< (car (brd-receivers m s))
+                    (car (car s)))))
+     (:casesplit (== (car (car s))
+                     (car (brd-receivers m s))))
+     (:claim (in m (mget :seen (cdar s)))
+             :hints (("Goal" :use ((:instance
+                                    prop=m-in-brd-receivers)))))
+     (= (car (brd-receivers m s))
+        (car (car s))
+        :hints (("Goal" :in-theory (enable brd-receivers))))
+     :prove :prove :pro
+     (:claim (<< (car (brd-receivers m s))
+                 (car (car s))))
+     (:claim (! (in (car (brd-receivers m s))
+                    (brd-receivers m s)))
+             :hints (("Goal" :use ((:instance prop=p-!in-brd-receivers
+                                              (p (car (brd-receivers m
+                                                                     s))))))))
+     (:claim (in (car (brd-receivers m s))
+                 (brd-receivers m s))
+             :hints (("Goal" :use ((:instance prop=car-in-tl
+                                              (xs (brd-receivers m s)))))))
+     (:claim nil)
+     :prove)))
+
+
+(property prop=brd-receivers-cdr1 (m :mssg s :s-fn)
+  :h (^ s
+        (== (car (car s))
+            (car (brd-receivers m s))))
+  (== (cdr (brd-receivers m s))
+      (brd-receivers m (cdr s)))
+  :instructions
+  (:pro
+   (:dv 1 1) (:r brd-receivers) :s
+   (:claim (in m (mget :seen (cdr (car s))))
+           :hints (("Goal" :use ((:instance
+                                  prop=m-in-brd-receivers)))))
+   :top :s))
+
+ 
+(property prop=brd-receivers-cdr2 (m :mssg s :s-fn)
+  :h (^ s
+        (!= (car (car s))
+            (car (brd-receivers m s))))
+  (== (brd-receivers m s)
+      (brd-receivers m (cdr s)))
+  :instructions
+  (:pro
+   (:dv 1) (:r brd-receivers) :s
+   (:claim (! (in m (mget :seen (cdr (car s)))))
+           :hints (("Goal" :use ((:instance
+                                  prop=m-in-brd-receivers)))))
+   :top :s))
+
+(encapsulate ()
+  (local
+   (in-theory (enable forward-help-fn)))
+  
+  (property prop=brd-receivers-forward-help-fn
+    (p :peer s :s-fn nbrs :lop m :mssg)
+    (== (brd-receivers m (forward-help-fn s nbrs m))
+        (brd-receivers m s))
+    :instructions
+    (:pro :induct :bash
+          :pro
+          (:casesplit (in (car (car s)) nbrs))
+          (:claim (== (forward-help-fn s nbrs m)
+                      (cons (cons (car (car s))
+                                  (add-pending-psfn m (cdr (car s))))
+                            (forward-help-fn (cdr s) nbrs m))))
+          (:claim (s-fnp (forward-help-fn s nbrs m)))
+          (:demote 12)
+          (:equiv (forward-help-fn s nbrs m)
+                      (cons (cons (car (car s))
+                                  (add-pending-psfn m (cdr (car s))))
+                            (forward-help-fn (cdr s) nbrs m)))
+          :pro
+
+          (:claim (== (mget :seen (add-pending-psfn m (cdr (car s))))
+                      (mget :seen (cdr (car s))))
+                  :hints (("Goal" :use ((:instance prop=add-pending-psfn-seen
+                                                   (pst (cdr (car s))))))))
+          (:claim (! (in m (mget :seen (add-pending-psfn m (cdr (car s)))))))
+          (= (brd-receivers m
+                      (cons (cons (car (car s))
+                                  (add-pending-psfn m (cdr (car s))))
+                            (forward-help-fn (cdr s) nbrs m)))
+             (brd-receivers m (forward-help-fn (cdr s) nbrs m)))
+          (= (equal (brd-receivers m (forward-help-fn (cdr s) nbrs m))
+                    (brd-receivers m (cdr s))))
+          :prove
+
+          (:claim (== (forward-help-fn s nbrs m)
+                      (cons (car s)
+                            (forward-help-fn (cdr s) nbrs m))))
+          (:claim (s-fnp (forward-help-fn s nbrs m)))
+          (:demote 12)
+          (:equiv (forward-help-fn s nbrs m)
+                  (cons (car s)
+                        (forward-help-fn (cdr s) nbrs m)))
+          :pro
+          (= (brd-receivers m
+                      (cons (car s)
+                            (forward-help-fn (cdr s) nbrs m)))
+             (brd-receivers m (forward-help-fn (cdr s) nbrs m)))
+          (= (brd-receivers m (forward-help-fn (cdr s) nbrs m))
+             (brd-receivers m (cdr s)))
+          :prove
+
+          :pro
+          (:casesplit (in (car (car s)) nbrs))
+          (:claim (== (forward-help-fn s nbrs m)
+                      (cons (cons (car (car s))
+                                  (add-pending-psfn m (cdr (car s))))
+                            (forward-help-fn (cdr s) nbrs m))))
+          (:claim (s-fnp (forward-help-fn s nbrs m)))
+          (:demote 12)
+          (:equiv (forward-help-fn s nbrs m)
+                  (cons (cons (car (car s))
+                              (add-pending-psfn m (cdr (car s))))
+                        (forward-help-fn (cdr s) nbrs m)))
+          :pro
+          (= (brd-receivers m
+                            (cons (cons (car (car s))
+                                        (add-pending-psfn m (cdr (car s))))
+                                  (forward-help-fn (cdr s) nbrs m)))
+             (cons (car (car s))
+                   (brd-receivers m (forward-help-fn (cdr s) nbrs m))))
+          :prove
+
+          (:claim (== (forward-help-fn s nbrs m)
+                      (cons (car s)
+                            (forward-help-fn (cdr s) nbrs m))))
+          (:claim (s-fnp (forward-help-fn s nbrs m)))
+          (:demote 12)
+          (:equiv (forward-help-fn s nbrs m)
+                  (cons (car s)
+                        (forward-help-fn (cdr s) nbrs m)))
+          :pro
+          (= (brd-receivers m
+                      (cons (car s)
+                            (forward-help-fn (cdr s) nbrs m)))
+             (cons (car (car s))
+                   (brd-receivers m (forward-help-fn (cdr s) nbrs m))))
+          (= (cons (car (car s))
+                   (brd-receivers m (forward-help-fn (cdr s) nbrs m)))
+             (brd-receivers m s))
+          :s :bash)))
+
+
+(property prop=mget-cdr-mget (p :peer s :s-fn)
+  :h (mget p (cdr s))
+  (mget p s)
+  :hints (("Goal" :in-theory
+           (e/d (acl2::maximal-records-theory)
+                (prop=mget-f2b=mget)))))
+
+(encapsulate ()
+  (property in-set-diff (xs ys :tl)
+    :h (set-difference-equal xs ys)
+    (in (car (set-difference-equal xs ys)) xs))
+
+  (property in-<<-orderedp (x :all xs :tl)
+    :h (^ (orderedp xs)
+          (in x (cdr xs)))
+    (<< (car xs) x))
+  
+  (property orderedp-set-difference (xs ys :tl)
+    :h (orderedp xs)
+    (orderedp (set-difference-equal xs ys))
+    :instructions
+    (:pro :induct :pro
+          (:claim (orderedp (cdr xs)))
+          (:claim (orderedp (set-difference-equal (cdr xs) ys)))
+          (:casesplit (member-equal (car xs) ys))
+          :prove
+          (= (set-difference-equal xs ys)
+             (cons (car xs)
+                   (set-difference-equal (cdr xs) ys)))
+          (:casesplit (consp (set-difference-equal (cdr xs) ys)))
+          (:claim (in
+                   (car (set-difference-equal (cdr xs) ys))
+                   (cdr xs)))
+                                
+          (:claim (<< (car xs) (car (set-difference-equal
+                                     (cdr xs)
+                                     ys))))
+          :prove
+          :prove
+          :bash
+          :bash)))
+
+(property in-m-set-diff (m :all xs ys :tl)
+  :h (^ (in m xs)
+        (! (in m ys)))
+  (in m (set-difference-equal xs ys)))
+
+
+(property prop=f2b-st-broadcast (m :mssg ms :lom pst :ps-fn)
+  :h (^ (in m (mget :seen pst))
+        (! (in m ms))
+        (orderedp (mget :seen pst)))
+  (== (f2b-st pst ms)
+      (mset :seen
+            (insert-unique m
+                           (mget :seen
+                                 (f2b-st pst ms)))
+            (f2b-st pst ms)))
+  :instructions
+  (:pro
+   (:dv 1) (:r f2b-st) :s
+   (= (set-difference-equal (mget :seen pst) ms)
+      (insert-unique m
+                     (set-difference-equal (mget :seen pst)
+                                           ms)))
+   :top
+   (:prove :hints (("Goal" :in-theory (enable f2b-st))))))
+   
+
+
+(definec ordered-seenp (s :s-fn) :boolean
+  (match s
+    (() t)
+    (((& . pst) . rst)
+     (^ (orderedp (mget :seen pst))
+        (ordered-seenp rst)))))
+
+(property prop=ordered-seenp-cdar (s :s-fn)
+  :h (^ s
+        (ordered-seenp s))
+  (orderedp (mget :seen (cdar s))))
+
+(property prop=ordered-seen-f2b-st (ms :lom pst :ps-fn)
+  :h (orderedp (mget :seen pst))
+  (orderedp (mget :seen (f2b-st pst ms)))
+  :hints (("Goal" :in-theory (enable f2b-st))))
+
+
+(property prop=f2b-st-forwarder2 (m :mssg pst :ps-fn ms :lom)
+  :h (! (in m ms))
+  (equal (f2b-st (forwarder-new-pst pst m) ms)
+         (f2b-st (mset :seen
+                       (insert-unique m (mget :seen pst))
+                       pst)
+                 ms))
+  :hints (("Goal" :in-theory (enable f2b-st forwarder-new-pst))))
+
+(encapsulate ()
+  (in-theory (enable update-forwarder-fn))
+  
+  (property prop=brd-receivers-update-forwarder1 (p :peer m :mssg s :s-fn)
+    :h (== p (car (car s)))
+    (== (brd-receivers m (update-forwarder-fn p m s))
+        (cons (car (car s))
+              (brd-receivers m (cdr s))))
+    :instructions
+    (:pro
+     (:claim (== (update-forwarder-fn p m s)
+                 (cons (cons (car (car s))
+                             (forwarder-new-pst (cdr (car s)) m))
+                       (cdr s))))
+     (:claim (s-fnp (update-forwarder-fn p m s)))
+     (:demote 6)
+     (:equiv (update-forwarder-fn p m s)
+                 (cons (cons (car (car s))
+                             (forwarder-new-pst (cdr (car s)) m))
+                       (cdr s)))
+     (:claim (in m (mget :seen (forwarder-new-pst (cdr (car s)) m)))
+             :hints (("Goal" :in-theory (enable forwarder-new-pst))))
+     :prove))
+
+  (property prop=brd-receivers-update-forwarder2 (p :peer m :mssg s :s-fn)
+    :h (^ s
+          (!= p (car (car s)))
+          (in m (mget :seen (cdr (car s)))))
+    (== (brd-receivers m (update-forwarder-fn p m s))
+        (cons (car (car s))
+              (brd-receivers m (update-forwarder-fn p m (cdr s)))))
+    :instructions
+    (:pro
+     (:claim (== (update-forwarder-fn p m s)
+                 (cons (car s)
+                       (update-forwarder-fn p m (cdr s)))))
+     (:claim (s-fnp (update-forwarder-fn p m s)))
+     (:demote 8)
+     (:equiv (update-forwarder-fn p m s)
+                 (cons (car s)
+                       (update-forwarder-fn p m (cdr s))))
+     :pro
+     :prove))
+
+  (property prop=brd-receivers-update-forwarder3 (p :peer m :mssg s :s-fn)
+    :h (^ s
+          (!= p (car (car s)))
+          (! (in m (mget :seen (cdr (car s))))))
+    (== (brd-receivers m (update-forwarder-fn p m s))
+        (brd-receivers m (update-forwarder-fn p m (cdr s))))
+    :instructions
+    (:pro
+     (:claim (== (update-forwarder-fn p m s)
+                 (cons (car s)
+                       (update-forwarder-fn p m (cdr s)))))
+     (:claim (s-fnp (update-forwarder-fn p m s)))
+     (:demote 8)
+     (:equiv (update-forwarder-fn p m s)
+             (cons (car s)
+                   (update-forwarder-fn p m (cdr s))))
+     :pro
+     :prove)))
+
+
+(encapsulate ()
+  (local
+   (in-theory (enable update-forwarder-fn
+                      forwarder-new-pst)))
+
+  (property prop=caar-update-forwarder (p :peer m :mssg s :s-fn)
+    :h s
+    (== (car (car (update-forwarder-fn p m s)))
+        (car (car s))))
+                      
+  (property prop=update-forwarder-seen1 (p :peer m :mssg s :s-fn)
+    :h (^ s
+          (!= p (car (car s))))
+    (== (mget :seen (cdr (car (update-forwarder-fn p m s))))
+        (mget :seen (cdr (car s)))))
+
+  (property prop=update-forwarder-seen2 (p :peer m :mssg s :s-fn)
+    :h (^ s
+          (orderedp (mget :seen (cdr (car s))))
+          (== p (car (car s))))
+    (== (mget :seen (cdr (car (update-forwarder-fn p m s))))
+        (insert-unique m (mget :seen (cdr (car s))))))
+
+  (property prop=update-forwarder-seen4 (p :peer m :mssg s :s-fn)
+    :h (^ s
+          (! (in m (mget :seen
+                         (cdr (car (update-forwarder-fn p m s)))))))
+    (! (in m (mget :seen (cdr (car s)))))))
+
+(property prop=brd-receivers-update-forwarder-pcaars1 (p :peer m :mssg s :s-fn)
+  :h (^ s
+        (!= p (car (car s)))
+        (! (equal (car (car s))
+                  (car (brd-receivers m (update-forwarder-fn p m s))))))
+  (== (brd-receivers m (update-forwarder-fn p m s))
+      (brd-receivers m (update-forwarder-fn p m (cdr s))))
+  :instructions
+  (:pro
+   (:claim (== (car (car s))
+               (car (car (update-forwarder-fn p m s))))
+           :hints (("Goal" :use ((:instance
+                                  prop=caar-update-forwarder)))))
+   (:claim (!= (car (car (update-forwarder-fn p m s)))
+               (car (brd-receivers m (update-forwarder-fn p m s)))))
+   (:claim (! (in m (mget :seen (cdr (car (update-forwarder-fn p m s))))))
+           :hints (("Goal" :use ((:instance prop=m-in-brd-receivers
+                                            (s (update-forwarder-fn p m s)))))))            
+   (:claim (! (in m (mget :seen (cdr (car s)))))
+           :hints (("Goal" :use ((:instance prop=update-forwarder-seen4)))))
+   (:prove :hints (("Goal" :use ((:instance
+                                  prop=brd-receivers-update-forwarder3)))))
+   ))
+
+
+(property prop=brd-receivers-update-forwarder-pcaars2 (p :peer m :mssg s :s-fn)
+  :h (^ s
+        (!= p (car (car s)))
+        (equal (car (car s))
+               (car (brd-receivers m (update-forwarder-fn p m s)))))
+  (== (brd-receivers m (update-forwarder-fn p m s))
+      (cons (car (car s))
+            (brd-receivers m (update-forwarder-fn p m (cdr s)))))
+  :instructions
+  (:pro
+   (:claim (== (car (car s))
+               (car (car (update-forwarder-fn p m s))))
+           :hints (("Goal" :use ((:instance
+                                  prop=caar-update-forwarder)))))
+   (:claim (== (car (car (update-forwarder-fn p m s)))
+               (car (brd-receivers m (update-forwarder-fn p m s)))))
+   (:claim (in m (mget :seen (cdr (car (update-forwarder-fn p m s)))))
+           :hints (("Goal" :use ((:instance prop=m-in-brd-receivers
+                                            (s (update-forwarder-fn p m
+                                                                    s)))))))
+   (:claim (== (mget :seen (cdr (car (update-forwarder-fn p m s))))
+               (mget :seen (cdr (car s))))
+           :hints (("Goal" :use ((:instance prop=update-forwarder-seen1)))))
+           
+   (:claim (in m (mget :seen (cdr (car s)))))
+   (:prove :hints (("Goal" :use ((:instance
+                                  prop=brd-receivers-update-forwarder2)))))))
+
+
+(propertyd prop=car-brd-receivers-update-forwarder (p :peer m :mssg s :s-fn)
+  :h (mget p s)
+  (brd-receivers m (update-forwarder-fn p m s))
+  :instructions
+  (:pro :induct :bash
+        (:claim (!= (car (car s)) p))
+        (:casesplit (in m (mget :seen (cdr (car s)))))
+        (:prove :hints (("Goal" :use ((:instance
+                                       prop=brd-receivers-update-forwarder2)))))
+        :pro
+        (:claim (mget p (cdr s))
+                :hints (("Goal" :in-theory (enable
+                                            acl2::maximal-records-theory))))
+        (:claim (brd-receivers m (update-forwarder-fn p m (cdr s))))
+        (:prove :hints (("Goal" :use ((:instance
+                                       prop=brd-receivers-update-forwarder3)))))
+        :pro
+        (:prove :hints (("Goal" :use ((:instance
+                                       prop=brd-receivers-update-forwarder1)))))
+        :pro
+        (:prove :hints (("Goal" :in-theory (enable update-forwarder-fn
+                                                   brd-receivers))))))
+
+
+(property prop=set-diff-insert-!in (m :all xs ys :tl)
+  :h (^ (orderedp xs)
+        (! (in m ys)))
+  (== (set-difference-equal (insert-unique m xs) ys)
+      (insert-unique m (set-difference-equal xs ys))))
+
+(encapsulate ()
+  (local 
+   (property prop=in->member (x :tl m :all)
+     (=> (in m x)
+         (member-equal m x))))
+  (property member-equal-insert-unique (m :all x :tl)
+    (member-equal m (insert-unique m x))))
+  
+  ;; see utils insert-unique-diff
+(property insert-unique-diff2 (x y :tl m :all)
+  :h (^ (orderedp x)
+        (in m x))
+  (== (set-difference-equal x (insert-unique m y))
+      (remove-equal m (set-difference-equal x y))))
+
+(property insert-unique-remove-same (x :tl m :all)
+  :check-contracts? nil
+  :h (orderedp x)
+  (= (insert-unique m (remove-equal m x))
+     (insert-unique m x)))
+  
+(property insert-diff-insert (x y :tl m :all)
+  :h (orderedp x)
+  (== (insert-unique m (set-difference-equal x (insert-unique m y)))
+      (insert-unique m (set-difference-equal x y)))
+  :instructions
+  (:pro
+   (:casesplit (! (member-equal m x)))
+   (= (set-difference-equal x (insert-unique m y))
+      (set-difference-equal x y)
+      :hints (("Goal" :use ((:instance insert-unique-diff)))))
+
+   (:claim (in m x))
+   (= (set-difference-equal x (insert-unique m y))
+      (remove-equal m (set-difference-equal x y))
+      :hints (("Goal" :use ((:instance insert-unique-diff2)))))
+   (:claim (orderedp (set-difference-equal x y)))
+   (= (insert-unique m (remove-equal m (set-difference-equal x y)))
+      (insert-unique m (set-difference-equal x y))
+      :hints (("Goal" :use ((:instance insert-unique-remove-same
+                                       (x (set-difference-equal x y)))))))
+
+   ))
+
+
+(property prop=f2b-st-broadcast2 (m :mssg ms :lom pst :ps-fn)
+  :h (^ (! (in m ms))
+        (orderedp (mget :seen pst)))
+  (== (f2b-st (mset :seen
+                    (insert-unique m (mget :seen pst))
+                    pst)
+              ms)
+      (mset :seen
+            (insert-unique m
+                           (set-difference-equal (mget :seen pst)
+                                                 ms))
+            (f2b-st pst ms)))
+  :instructions
+  (:pro
+   (:dv 1) (:r f2b-st) :s
+   (:claim (ps-fnp (mset :seen
+                         (insert-unique m (mget :seen pst))
+                         pst)))
+   (= (insert-unique m
+                     (set-difference-equal (mget :seen pst)
+                                           ms))
+      (set-difference-equal (insert-unique m (mget :seen pst))
+                                           ms)
+      :hints (("Goal" :use ((:instance prop=set-diff-insert-!in
+                                       (xs (mget :seen pst))
+                                       (ys ms))))))
+   :top
+   (:prove :hints (("Goal" :in-theory (enable f2b-st))))))
+  
+  
+(property prop=update-forwarder-<<p (p :peer m :mssg s :s-fn)
+  :h (<< p (car (car s)))
+  (== (update-forwarder-fn p m s) s)
+      :hints (("Goal" :in-theory
+               (enable acl2::maximal-records-theory))))
+
+(property prop=s-fn-keys-order (s :s-fn)
+  :h s
+  (<< (car (car s))
+      (car (car (cdr s))))
+  :hints (("Goal" :in-theory
+           (enable acl2::maximal-records-theory))))
+
+(property prop=f2b-update-forwarder-fn2
+  (p :peer m :mssg ms :lom s :s-fn)
+  :h (^ (ordered-seenp s)
+        (! (in m ms)))
+  (== (f2b-help (update-forwarder-fn p m s) ms)
+      (broadcast-partial-help m
+                              (brd-receivers m (update-forwarder-fn p m s))
+                              (f2b-help s ms)))
+  :instructions
+  (:pro
+   :induct :pro
+   (:claim s)
+   (:casesplit (!= (car (car s)) p))
+   (:claim (ordered-seenp (cdr s)))
+   (:claim (s-fnp (cdr s)))
+   (:claim (equal (f2b-help (update-forwarder-fn p m (cdr s)) ms)
+                  (broadcast-partial-help
+                   m (brd-receivers m (update-forwarder-fn p m (cdr s)))
+                   (f2b-help (cdr s) ms))))
+
+   (:claim (== (update-forwarder-fn p m s)
+               (cons (car s)
+                     (update-forwarder-fn p m (cdr s)))))
+   (:claim (s-fnp (update-forwarder-fn p m s)))
+   (:demote 16)
+   (:equiv (update-forwarder-fn p m s)
+           (cons (car s)
+                 (update-forwarder-fn p m (cdr s))))
+   :pro
+   (:dv 1) (:r prop=f2b-helper-def)
+   (= (car (car (cons (car s)
+                      (update-forwarder-fn p m (cdr s)))))
+      (car (car s)))
+   (= (cdr (car (cons (car s)
+                      (update-forwarder-fn p m (cdr s)))))
+      (cdar s))
+   (= (cdr (cons (car s)
+                 (update-forwarder-fn p m (cdr s))))
+      (update-forwarder-fn p m (cdr s)))
+   (= (f2b-help (update-forwarder-fn p m (cdr s))
+                ms)
+      (broadcast-partial-help
+                m
+                (brd-receivers m (update-forwarder-fn p m (cdr s)))
+                (f2b-help (cdr s) ms)))
+ 
+   :top
+
+
+   (:claim (== (f2b-help s ms)
+               (cons (cons (caar s)
+                           (f2b-st (cdar s) ms))
+                     (f2b-help (cdr s) ms)))
+           :hints (("Goal" :use ((:instance prop=f2b-helper-def)))))
+   (:claim (s-bnp (f2b-help s ms)))
+   (:demote 18)
+   (:equiv (f2b-help s ms)
+           (cons (cons (caar s)
+                  (f2b-st (cdar s) ms))
+                 (f2b-help (cdr s) ms)))
+   :pro :s
+   
+   (:dv 2)
+   (:r broadcast-partial-help) :s :top
+
+   (:equiv (f2b-help s ms)
+           (cons (cons (caar s)
+                       (f2b-st (cdar s) ms))
+                 (f2b-help (cdr s) ms)))
+   (= (car (car (cons (cons (car (car s))
+                               (f2b-st (cdr (car s)) ms))
+                      (f2b-help (cdr s) ms))))
+      (car (car s)))
+   (= (cdr (car (cons (cons (car (car s))
+                            (f2b-st (cdr (car s)) ms))
+                      (f2b-help (cdr s) ms))))
+      (f2b-st (cdr (car s)) ms))
+
+   
+   (:casesplit (== (car (car s))
+                   (car (brd-receivers m (update-forwarder-fn p m s)))))
+   
+   (:claim (== (car (car s))
+               (car (car (update-forwarder-fn p m s))))
+           :hints (("Goal" :use ((:instance prop=caar-update-forwarder)))))
+
+   (:claim (== (car (car (update-forwarder-fn p m s)))
+               (car (brd-receivers m (update-forwarder-fn p m s)))))
+   :s
+
+   (:claim (orderedp (mget :seen (cdr (car s))))
+           :hints (("Goal" :use ((:instance prop=ordered-seenp-cdar)))))
+   (:claim (ps-fnp (cdr (car s))))
+   (:claim (orderedp (mget :seen (f2b-st (cdr (car s)) ms)))
+           :hints (("Goal" :use ((:instance prop=ordered-seen-f2b-st
+                                            (pst (cdr (car s))))))))
+   (:claim (in m (mget :seen (cdr (car (update-forwarder-fn p m s)))))
+           :hints (("Goal" :use ((:instance prop=m-in-brd-receivers
+                                            (s (update-forwarder-fn p m
+                                                                    s)))))))
+   (:demote 25)
+   (= (mget :seen (cdr (car (update-forwarder-fn p m s))))
+      (mget :seen (cdr (car s)))
+      :hints (("Goal" :use ((:instance prop=update-forwarder-seen1)))))
+   :pro
+   
+   (:dv 1)
+   (:claim (orderedp (mget :seen (cdar s)))
+           :hints (("Goal" :use ((:instance prop=ordered-seenp-cdar)))))
+   
+   (= (f2b-st (cdr (car s)) ms)
+      (mset :seen
+                  (insert-unique m
+                                 (mget :seen (f2b-st (cdr (car s)) ms)))
+                  (f2b-st (cdr (car s)) ms))
+      :hints (("Goal" :use ((:instance prop=f2b-st-broadcast
+                                       (pst (cdr (car s))))))))
+   :top :s
+   :s
+   (= (f2b-help s ms)
+      (cons (cons (car (car s))
+                       (f2b-st (cdr (car s)) ms))
+            (f2b-help (cdr s) ms)))
+   (= (car (cons (cons (car (car s))
+                             (f2b-st (cdr (car s)) ms))
+                 (f2b-help (cdr s) ms)))
+      (cons (car (car s))
+            (f2b-st (cdr (car s)) ms)))
+
+   
+   :pro
+   (:dv 1 1) (:r update-forwarder-fn) 
+   (:claim (ps-fnp (cdr (car s))))
+   :s :up (:r prop=f2b-helper-def) :s :top
+   (:claim (ps-fnp (mset :seen
+                         (insert-unique m (mget :seen (cdr (car s))))
+                         (cdr (car s)))))
+   
+   (:claim (equal (f2b-help (update-forwarder-fn p m (cdr s))
+                              ms)
+                    (broadcast-partial-help
+                         m
+                         (brd-receivers m (update-forwarder-fn p m (cdr s)))
+                         (f2b-help (cdr s) ms))))
+
+  
+   (= (brd-receivers m (update-forwarder-fn p m s))
+      (cons (car (car s))
+            (brd-receivers m (cdr s)))
+      :hints (("Goal" :use ((:instance
+                             prop=brd-receivers-update-forwarder1)))))
+
+   (:dv 2) (:r broadcast-partial-help) :s :up :s
+
+   (= (f2b-st (mset :seen
+                    (insert-unique m (mget :seen (cdr (car s))))
+                    (cdr (car s)))
+              ms)
+      (mset :seen
+            (insert-unique m
+                           (set-difference-equal (mget :seen (cdr (car s)))
+                                                 ms))
+            (f2b-st (cdr (car s)) ms))
+      :hints (("Goal" :use ((:instance prop=f2b-st-broadcast2
+                                       (pst (cdr (car s))))))))
+   :s
+   (:claim (<< (car (car s))
+               (car (car (cdr s))))
+           :hints (("Goal" :use ((:instance prop=s-fn-keys-order)))))
+   
+   (= (cdr s)
+      (update-forwarder-fn p m (cdr s))
+      :hints (("Goal" :use ((:instance prop=update-forwarder-<<p
+                                       (p (car (car s)))
+                                       (s (cdr s)))))))
+
+   (:dv 2 3 1)
+   (= (update-forwarder-fn p m (cdr s)) (cdr s)
+      :hints (("Goal" :use ((:instance prop=update-forwarder-<<p
+                                       (p (car (car s)))
+                                       (s (cdr s)))))))
+   
+   :top :s :s :bash
+   :pro
+   (:prove :hints (("Goal" :in-theory (enable f2b-help
+                                              broadcast-partial-help))))))
+   
+(in-theory (enable f2b-help))
+
+(propertyd prop=f2b-help-cons (s :s-fn m :mssg ms :lom)
+  :h s
+  (^ (f2b-help s (insert-unique m ms))
+     (equal (car (car s))
+            (car (car (f2b-help s (insert-unique m ms)))))))
+
+(in-theory (disable prop=f2b-helper-def))
+
+(propertyd prop=in->member (x :tl m :all)
+  (=> (in m x)
+      (member-equal m x)))
+
+(property prop=mset-seen-f2b-st (pst :ps-fn m :mssg ms :lom)
+  (== (mset :seen
+            (insert-unique m (mget :seen (f2b-st pst ms)))
+            (f2b-st pst ms))
+      (mset
+       :0tag 'ps-bn
+       (mset :pubs (mget :pubs pst)
+             (mset :seen
+                   (insert-unique m (set-difference-equal (mget :seen pst) ms))
+                   (mset :subs (mget :subs pst)
+                         nil)))))
+  :hints (("Goal" :in-theory (enable f2b-st))))
+  
+
+(propertyd prop=!in->!member (x :tl m :all)
+     (=> (! (in m x))
+         (! (member-equal m x))))
+
+(propertyd ordered-seenp-cdr (s :s-fn)
+  :h (^ s (ordered-seenp s))
+  (ordered-seenp (cdr s)))
+
+(propertyd prop=cons-update-forwarder-fn (p :peer m :mssg s :s-fn)
+  :h s
+  (update-forwarder-fn p m s)
+           :hints (("Goal" :in-theory (enable update-forwarder-fn))))
+
+(property prop=broadcast-partial-help-f2b-insertm
+  (p :peer m :mssg ms :lom s :s-fn)
+  :h (^ (! (in m ms))
+        (ordered-seenp s))
+  (== (broadcast-partial-help m
+                              (brd-receivers m (update-forwarder-fn p m s))
+                              (f2b-help s (insert-unique m ms)))
+      (broadcast-partial-help m
+                              (brd-receivers m (update-forwarder-fn p m s))
+                              (f2b-help s ms)))
+  :instructions
+  (:pro
+   :induct :pro
+   (:claim (lomp (insert-unique m ms)))
+   (:claim (^ (f2b-help s (insert-unique m ms))
+              (equal (car (car s))
+                     (car (car (f2b-help s (insert-unique m ms))))))
+           :hints (("Goal" :use ((:instance prop=f2b-help-cons)))))
+   (:dv 1) (:r broadcast-partial-help)
+   
+   (:casesplit (== (car (car (f2b-help s (insert-unique m ms))))
+                   (car (brd-receivers m (update-forwarder-fn p m s)))))
+
+   :s
+   (= (f2b-help s (insert-unique m ms))
+      (cons (cons (caar s)
+                  (f2b-st (cdar s) (insert-unique m ms)))
+            (f2b-help (cdr s) (insert-unique m ms)))
+      :hints (("Goal" :use ((:instance prop=f2b-helper-def
+                                       (ms (insert-unique m ms)))))))
+   :s
+   (:claim (ordered-seenp (cdr s))
+           :hints (("Goal" :use ((:instance ordered-seenp-cdr)))))
+   (:claim (equal (broadcast-partial-help
+                   m
+                   (brd-receivers m (update-forwarder-fn p m (cdr s)))
+                   (f2b-help (cdr s) (insert-unique m ms)))
+                  (broadcast-partial-help
+                   m
+                   (brd-receivers m (update-forwarder-fn p m (cdr s)))
+                   (f2b-help (cdr s) ms))))
+   (:claim (== (car (car s))
+               (car (car (update-forwarder-fn p m s))))
+           :hints (("Goal" :use ((:instance prop=caar-update-forwarder)))))
+   
+   (:claim (== (car (car (update-forwarder-fn p m s)))
+               (car (brd-receivers m (update-forwarder-fn p m s)))))
+
+   (:claim (update-forwarder-fn p m s)
+           :hints (("Goal" :use ((:instance prop=cons-update-forwarder-fn)))))
+                                  
+   (= (cdr (brd-receivers m (update-forwarder-fn p m s)))
+      (brd-receivers m (cdr (update-forwarder-fn p m s)))
+      :hints (("Goal" :use ((:instance prop=brd-receivers-cdr1
+                                       (s (update-forwarder-fn p m s)))))))
+   (= (cdr (update-forwarder-fn p m s))
+      (update-forwarder-fn p m (cdr s))
+      :hints (("Goal" :use ((:instance prop=update-forwarder-fn-cdr)))))
+   
+   (:equiv (broadcast-partial-help m
+                                   (brd-receivers m (update-forwarder-fn p m (cdr s)))
+                                   (f2b-help (cdr s)
+                                             (insert-unique m ms)))
+           (broadcast-partial-help m
+            (brd-receivers m (update-forwarder-fn p m (cdr s)))
+            (f2b-help (cdr s) ms)))
+   (:claim (ps-fnp (cdr (car s))))
+   (:claim (lomp (insert-unique m ms)))
+   (= (mget :seen (f2b-st (cdr (car s))
+                          (insert-unique m ms)))
+      (set-difference-equal (mget :seen (cdr (car s)))
+                            (insert-unique m ms))
+      :hints (("Goal" :use ((:instance prop=f2b-st-check
+                                       (ps (cdr (car s)))
+                                       (ms (insert-unique m ms)))))))
+   (:claim (orderedp (mget :seen (cdr (car s))))
+           :hints (("Goal" :use ((:instance prop=ordered-seenp-cdar)))))
+   (= (insert-unique m (set-difference-equal (mget :seen (cdr (car s)))
+                                             (insert-unique m ms)))
+      (insert-unique m (set-difference-equal
+                        (mget :seen (cdr (car s)))
+                        ms))
+      :hints (("Goal" :use ((:instance insert-diff-insert
+                                       (x (mget :seen (cdr (car s))))
+                                       (y ms))))))
+   (:claim (==  (car (car s))
+                (car (brd-receivers m (update-forwarder-fn p m s)))))
+
+   (= (set-difference-equal (mget :seen (cdr (car s))) ms)
+      (mget :seen (f2b-st (cdr (car s)) ms))
+      :hints (("Goal" :use ((:instance prop=f2b-st-check
+                                       (ps (cdr (car s))))))))
+
+   (:dv 1 2 3) (:r f2b-st) :s :up :s
+   (:claim (== (mset :seen
+                     (insert-unique m (mget :seen (f2b-st (cdr (car s)) ms)))
+                     (f2b-st (cdr (car s)) ms))
+               (mset
+                :0tag 'ps-bn
+                (mset :pubs (mget :pubs (cdr (car s)))
+                      (mset :seen
+                            (insert-unique m
+                                           (set-difference-equal
+                                            (mget :seen (cdr (car s)))
+                                            ms))
+                            (mset :subs (mget :subs (cdr (car s)))
+                                  nil)))))
+           :hints (("Goal" :use ((:instance prop=mset-seen-f2b-st
+                                            (pst (cdr (car s))))))))
+   :s :up :up
+
+   (= (f2b-st (cdr (car s)) ms)
+      (cdr (car (f2b-help s ms)))
+      :hints (("Goal" :use ((:instance prop=f2b-helper-cdar)))))
+
+   :up (:dv 2) (:r broadcast-partial-help)
+   (:claim (== (f2b-help s ms)
+               (cons (cons (caar s)
+                  (f2b-st (cdar s) ms))
+                     (f2b-help (cdr s) ms)))
+           :hints (("Goal" :use ((:instance prop=f2b-helper-def)))))
+   (:claim (f2b-help s ms))
+   (:claim (consp (car (f2b-help s ms))))
+   (:claim (equal (car (car (f2b-help s ms)))
+                  (car (car s)))
+           :hints (("Goal" :use ((:instance prop=f2b-helper-caar)))))
+   :s :up :s
+   (= (ps-fn-seen (cdr (car s)))
+      (mget :seen (cdr (car s))))
+   :s 
+   (:claim (ordered-seenp (cdr s))
+           :hints (("Goal" :use ((:instance ordered-seenp-cdr)))))
+   (:claim (equal (broadcast-partial-help
+                         m
+                         (brd-receivers m (update-forwarder-fn p m (cdr s)))
+                         (f2b-help (cdr s) (insert-unique m ms)))
+                    (broadcast-partial-help
+                         m
+                         (brd-receivers m (update-forwarder-fn p m (cdr s)))
+                         (f2b-help (cdr s) ms))))
+   (:claim (!= (car (car s))
+               (car (brd-receivers m (update-forwarder-fn p m s)))))
+   (:claim (update-forwarder-fn p m s)
+           :hints (("Goal" :use ((:instance prop=cons-update-forwarder-fn)))))
+   (:claim (== (car (car s))
+               (car (car (update-forwarder-fn p m s))))
+           :hints (("Goal" :use ((:instance prop=caar-update-forwarder)))))
+   (:claim (!= (car (car (update-forwarder-fn p m s)))
+               (car (brd-receivers m (update-forwarder-fn p m s)))))
+   (= (brd-receivers m (update-forwarder-fn p m s))
+      (brd-receivers m (cdr (update-forwarder-fn p m s)))
+      :hints (("Goal" :use ((:instance prop=brd-receivers-cdr2
+                                       (s (update-forwarder-fn p m s)))))))
+   (= (cdr (update-forwarder-fn p m s))
+      (update-forwarder-fn p m (cdr s))
+      :hints (("Goal" :use ((:instance prop=update-forwarder-fn-cdr)))))
+
+   (:equiv (broadcast-partial-help
+                         m
+                         (brd-receivers m (update-forwarder-fn p m (cdr s)))
+                         (f2b-help (cdr s) (insert-unique m ms)))
+           (broadcast-partial-help
+            m
+            (brd-receivers m (update-forwarder-fn p m (cdr s)))
+            (f2b-help (cdr s) ms)))
+
+   :up (:dv 2) (:r broadcast-partial-help) :s
+   
+   (= (car (car (f2b-help s ms)))
+      (car (car s))
+      :hints (("Goal" :use ((:instance prop=f2b-helper-caar)))))
+
+   (:claim (== (f2b-help s ms)
+               (cons (cons (caar s)
+                           (f2b-st (cdar s) ms))
+                     (f2b-help (cdr s) ms)))
+           :hints (("Goal" :use ((:instance prop=f2b-helper-def)))))
+   (:claim (f2b-help s ms))
+   (:claim (consp (car (f2b-help s ms))))
+   
+   (:claim (== (brd-receivers m (update-forwarder-fn p m s))
+               (brd-receivers m (cdr (update-forwarder-fn p m s))))
+           :hints (("Goal" :use ((:instance prop=brd-receivers-cdr2
+                                            (s (update-forwarder-fn p m
+                                                                    s)))))))
+   (= (update-forwarder-fn p m (cdr s))
+      (cdr (update-forwarder-fn p m s))
+      :hints (("Goal" :use ((:instance prop=update-forwarder-fn-cdr)))))
+   (:equiv (brd-receivers m (cdr (update-forwarder-fn p m s)))
+           (brd-receivers m (update-forwarder-fn p m s)))
+   :s :up :s
+   (:equiv (f2b-help s ms)
+           (cons (cons (car (car s))
+                       (f2b-st (cdr (car s)) ms))
+                 (f2b-help (cdr s) ms)))
+   (= (car (cons (cons (car (car s))
+                        (f2b-st (cdr (car s)) ms))
+                 (f2b-help (cdr s) ms)))
+      (cons (car (car s))
+            (f2b-st (cdr (car s)) ms)))
+   (= (cdr (car (f2b-help s (insert-unique m ms))))
+      (f2b-st (cdr (car s)) (insert-unique m ms))
+      :hints (("Goal" :use ((:instance prop=f2b-helper-cdar
+                                       (ms (insert-unique m ms)))))))
+   :s
+   (:claim (ps-fnp (cdr (car s))))
+   (:dv 2) (:r f2b-st) :s :up
+   (:dv 1) (:r f2b-st) :s
+   (:claim (! (in m (mget :seen (cdar (update-forwarder-fn p m s)))))
+           :hints (("Goal" :use ((:instance prop=m-in-brd-receivers
+                                            (s (update-forwarder-fn p m
+                                                                    s)))))))
+   (:claim (! (in m (mget :seen (cdr (car s)))))
+           :hints (("Goal" :use ((:instance prop=update-forwarder-seen4)))))
+   (:claim (! (member-equal m (mget :seen (cdr (car s)))))
+           :hints (("Goal" :use ((:instance prop=!in->!member
+                                            (x (mget :seen (cdr (car s)))))))))
+   (= (set-difference-equal (mget :seen (cdr (car s)))
+                            (insert-unique m ms))
+      (set-difference-equal (mget :seen (cdr (car s))) ms)
+      :hints (("Goal" :use ((:instance insert-unique-diff
+                                       (x (mget :seen (cdr (car s))))
+                                       (y ms))))))
+   :up :s :pro
+   (:prove :hints (("Goal" :in-theory (enable update-forwarder-fn
+                                              broadcast-partial-help))))))
+
+(in-theory (enable f2b fn-pending-mssgs))
+
+(propertyd prop=forward-fn2-broadcast (p :peer m :mssg s :s-fn)
+  :h (^ (mget p s)
+        (in m (mget :pending (mget p s)))
+        (ordered-seenp s)
+        (!= (fn-pending-mssgs (forward-fn p m s))
+            (fn-pending-mssgs s)))
+  (== (f2b (forward-fn p m s))
+      (broadcast-partial-help m
+                              (brd-receivers m (forward-fn p m s))
+                              (f2b s)))
+  :instructions
+  (:pro
+   (= (f2b (forward-fn p m s))
+      (f2b-help (forward-fn p m s)
+                (fn-pending-mssgs (forward-fn p m s)))
+      :hints (("Goal" :in-theory (enable f2b))))
+   (:dv 1 1) (:r forward-fn) :s :up (:r prop=f2b-forward-fn-help)
+   (:r prop=f2b-update-forwarder-fn2) :top
+   (:dv 2 2 2) (:r forward-fn) :s :up (:r prop=brd-receivers-forward-help-fn)
+   :top
+   (:claim (v (== (fn-pending-mssgs (forward-fn p m s))
+                  (remove-equal m (fn-pending-mssgs s)))
+              (== (fn-pending-mssgs (forward-fn p m s))
+                  (fn-pending-mssgs s)))
+           :hints (("Goal" :use ((:instance
+                                  prop=fn-pending-mssgs-forward-fn)))))
+   (:claim (== (fn-pending-mssgs (forward-fn p m s))
+               (remove-equal m (fn-pending-mssgs s))))
+   (= (f2b s)
+      (f2b-help s (fn-pending-mssgs s))
+      :hints (("Goal" :in-theory (enable f2b))))
+
+   (:claim (== (fn-pending-mssgs s)
+               (union-set (mget :pending (cdr (car s)))
+                          (fn-pending-mssgs (cdr s)))))
+   (:claim (orderedp (union-set (mget :pending (cdr (car s)))
+                                (fn-pending-mssgs (cdr s)))))
+   (:claim (orderedp (fn-pending-mssgs s)))
+
+   (:equiv (fn-pending-mssgs (forward-fn p m s))
+           (remove-equal m (fn-pending-mssgs s)))
+
+   (:claim (in m (fn-pending-mssgs s))
+           :hints (("Goal" :use ((:instance
+                                  prop=in-p-fn-pending)))))
+
+   (:dv 2 3 2)
+   (= (fn-pending-mssgs s)
+      (insert-unique m (remove-equal m (fn-pending-mssgs s)))
+      :hints (("Goal" :use ((:instance insert-unique-remove-ordered3
+                                       (r m)
+                                       (x (fn-pending-mssgs s)))))))
+   :top
+
+   (:claim (! (in m (remove-equal m (fn-pending-mssgs s)))))
+   (:dv 2)
+   (:r prop=broadcast-partial-help-f2b-insertm) :up :s :s :s :s
+   (:claim (v (== (fn-pending-mssgs (forward-fn p m s))
+                  (remove-equal m (fn-pending-mssgs s)))
+              (== (fn-pending-mssgs (forward-fn p m s))
+                  (fn-pending-mssgs s)))
+           :hints (("Goal" :use ((:instance
+                                  prop=fn-pending-mssgs-forward-fn)))))
+   (:claim (== (fn-pending-mssgs (forward-fn p m s))
+               (remove-equal m (fn-pending-mssgs s))))
+   :prove :s :s))
+
+
+(encapsulate ()
+  (local
+   (in-theory (enable update-forwarder-fn)))
+
+  (local
+   (property prop=update-forwarder-fn-neq (p :peer m :mssg s :s-fn)
+     :h (^ s (!= p (car (car s))))
+     (== (update-forwarder-fn p m s)
+         (cons (car s) (update-forwarder-fn p m (cdr s))))
+     :hints (("Goal" :in-theory (enable update-forwarder-fn)))))
+
+  (local
+   (property prop=mget-update-forwarder-fn (p x :peer m :mssg s :s-fn)
+     :h (mget x (update-forwarder-fn p m s))
+     (mget x s)
+     :instructions
+     (:pro :induct :bash
+           :pro
+           (:claim (! (equal (car (car s)) p)))
+           (:claim (== (update-forwarder-fn p m s)
+                       (cons (car s)
+                             (update-forwarder-fn p m (cdr s))))
+                   :hints (("Goal" :use ((:instance
+                                          prop=update-forwarder-fn-neq)))))
+           (:casesplit (== x (car (car s))))
+           (:r mget) :s :bash
+           
+
+           (:demote 10)
+           (:claim (== (update-forwarder-fn p m s)
+                       (cons (car s)
+                             (update-forwarder-fn p m (cdr s))))
+                   :hints (("Goal" :use ((:instance
+                                          prop=update-forwarder-fn-neq)))))
+           (:equiv (update-forwarder-fn p m s)
+                   (cons (car s)
+                         (update-forwarder-fn p m (cdr s))))
+           (:dv 1) (:r mget) :s :top :pro
+           (:claim (mget x (cdr s)))
+           (:r mget) :s
+
+           :pro
+           (:casesplit (== x (car (car s)))) :prove
+           (:claim (== (car (car (update-forwarder-fn p m s)))
+                       (car (car s))))
+           (:demote 8)
+           (:dv 1) (:r mget) :s :top :s
+           :prove)))
+  
+  
+  (propertyd prop=mget-car-brd-receivers-forward-fn (p :peer m :mssg s :s-fn)
+    :h (^ (mget p s)
+          (in m (mget :pending (mget p s))))
+    (mget (car (brd-receivers m (forward-fn p m s))) s)
+    :instructions
+    (:pro
+     (= (forward-fn p m s)
+        (forward-help-fn (update-forwarder-fn p m s)
+                         (mget (mget :tp m)
+                               (mget :nsubs (mget p s)))
+                         m)
+        :hints (("Goal" :in-theory (enable forward-fn))))
+     (:claim (lopp (mget (mget :tp m)
+                         (mget :nsubs (mget p s)))))
+     (:claim (s-fnp (update-forwarder-fn p m s)))
+     (= (brd-receivers m (forward-help-fn (update-forwarder-fn p m s)
+                                          (mget (mget :tp m)
+                                                (mget :nsubs (mget p s)))
+                                          m))
+        (brd-receivers m (update-forwarder-fn p m s))
+        :hints (("Goal" :use ((:instance prop=brd-receivers-forward-help-fn
+                                         (s (update-forwarder-fn p m s))
+                                         (nbrs (mget (mget :tp m)
+                                                     (mget :nsubs
+                                                           (mget p s)))))))))
+     (:claim (brd-receivers m (update-forwarder-fn p m s))
+             :hints (("Goal" :use ((:instance
+                                    prop=car-brd-receivers-update-forwarder)))))
+     (:claim (mget (car (brd-receivers m (update-forwarder-fn p m s)))
+                   (update-forwarder-fn p m s))
+             :hints (("Goal" :use ((:instance prop=mget-car-brd-receivers
+                                              (s (update-forwarder-fn p m
+                                                                      s)))))))
+     (:prove :hints (("Goal" :use ((:instance
+                                    prop=mget-update-forwarder-fn
+                                    (x (car (brd-receivers m (update-forwarder-fn p m s))))))))))))
+
+(in-theory (disable f2b f2b-definition-rule forward-fn forward-fn-definition-rule
+                    f2b-help f2b-help-definition-rule
+                    fn-pending-mssgs fn-pending-mssgs-definition-rule
+                    prop=f2b-help-cons prop=f2b-helper-def
+                    prop=broadcast-partial-help-f2b-insertm
+                    prop=mset-seen-f2b-st prop=f2b-update-forwarder-fn2
+                    prop=s-fn-keys-order prop=update-forwarder-<<p
+                    prop=f2b-st-broadcast2 insert-diff-insert
+                    insert-unique-remove-same insert-unique-diff2
+                    prop=set-diff-insert-!in
+                    prop=brd-receivers-update-forwarder-pcaars2
+                    prop=brd-receivers-update-forwarder-pcaars1
+                    prop=update-forwarder-seen4
+                    prop=update-forwarder-seen2
+                    prop=update-forwarder-seen1 in-m-set-diff
+                    prop=f2b-st-forwarder2
+                    prop=brd-receivers-update-forwarder3 prop=ordered-seen-f2b-st
+                    prop=brd-receivers-update-forwarder2 prop=ordered-seenp-cdar
+                    prop=brd-receivers-update-forwarder1 prop=f2b-st-broadcast
+                    orderedp-set-difference in-<<-orderedp in-set-diff
+                    prop=mget-cdr-mget prop=brd-receivers-cdr2 prop=brd-receivers-cdr1
+                    prop=brd-receivers-forward-help-fn prop=m-in-brd-receivers
+                    prop=caars-!in-brd-receivers-cdrs brd-receivers))
+

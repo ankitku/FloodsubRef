@@ -1,10 +1,9 @@
 (in-package "ACL2S")
 
 (include-book "utils")
-(include-book "bn")
-(include-book "fn")
+(include-book "bn-trx")
+(include-book "fn-trx")
 (include-book "f2b-commit")
 (include-book "good-fn")
-;; Currently cleaning up some thms in f2b-ref2
-;; So, part of the next file is commented
-(include-book "f2b-ref2")
+(include-book "trx-rels")
+(include-book "f2b-sim-ref")

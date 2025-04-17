@@ -363,9 +363,60 @@
   :hints (("Goal" :use (in-m-remove-union-set
                         not-in-m-remove-union-set))))
 
+(property prop=union-set-order (x y z :tl)
+  :h (== (isort-set z) z)
+  (== (union-set x (union-set y z))
+      (union-set y (union-set x z))))
 
+
+(property prop=subsetp-equal-insert-unique (x y :tl)
+  :h (^ x
+        (subsetp-equal x y)
+        (== (isort-set y) y))
+  (== (insert-unique (car x) y) y)
+   :hints (("Goal" :use ((:instance insert-member-isort
+                                                 (m (car x))
+                                                 (x y))))))
+
+(property prop=subsetp-equal-isort-set (x y :tl)
+  :h (^ (subsetp-equal x y)
+        (== (isort-set y) y))
+  (== (union-set x y) y))
 
 (property prop=set-diff-nil-subset (xs ys :tl)
   :h (== (set-difference-equal xs ys) nil)
   (subsetp-equal xs ys))
 
+(property insert-in-ordered (m :all x :tl)
+  :h (^ (in m x)
+        (orderedp x))
+  (== (insert-unique m x)
+      x))
+
+;;------------- DATA DEFINITIONS ------------------------
+
+(defdata-alias peer nat)
+(defdata-alias lop nat-list)
+(defdata-alias topic var)
+
+;; Peers are identified by natural numbers
+;; Topics are identified by variables
+;; A message contains payload, topic and originating peer
+(defdata mssg (record
+               (pld . string)
+               (tp . topic)
+               (or . peer)))
+
+(property mssg-check-prop (x :mssg)
+  (^ (stringp (mget :pld x))
+     (topicp (mget :tp x))
+     (peerp (mget :or x)))
+  :hints (("Goal" :in-theory (enable mssgp)))
+  :rule-classes :forward-chaining)
+
+(sig isort-set ((listof :a)) => (listof :a))
+(sig insert-unique (:a (listof :a)) => (listof :a))
+
+(defdata lom (listof mssg))
+(defdata lot (listof topic))
+(defdata topic-lop-map (map topic lop))
