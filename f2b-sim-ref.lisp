@@ -922,11 +922,11 @@
     (^ (rel-> w v)
        (rel-B u v))))
 
-(defthm wfs3
-  (=> (^ (borfp s) (borfp w) (borfp u)
-         (rel-B s w)
-         (rel-> s u))
-      (exists-v-wfs s u w))
+(property wfs3 (s w u :borf)
+  :check-contracts? nil
+  :h (^ (rel-B s w)
+        (rel-> s u))
+  (exists-v-wfs s u w)
   :hints (("Goal" :use ((:instance wfs3-help)
                         (:instance exists-v-wfs-suff
                                    (v (exists-v s u w)))))))
