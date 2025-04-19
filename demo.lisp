@@ -548,7 +548,7 @@
 
 (property prop=ordered-seenp-cdar (s :s-fn)
   :h (^ s (ordered-seenp s))
-  (orderedp (mget :seen (cdar s))))
+  :b (orderedp (mget :seen (cdar s))))
 
 (definec orderedp (x :tl) :boolean
   (match x
@@ -564,7 +564,7 @@
 
 (property b-maps-f2b (s :s-fn)
   :h (good-s-fnp s)
-  (rel-B s (f2b s)))
+  :b (rel-B s (f2b s)))
 
 ;;---------------------------------------------------
 ;; WFS 2
@@ -577,8 +577,8 @@
 
 (property wfs2 (s w :borf)
   :h (rel-B s w)
-  (== (L s)
-      (L w)))
+  :b (== (L s)
+         (L w)))
 
 ;;---------------------------------------------------
 ;; WFS 3
@@ -641,4 +641,4 @@
   :check-contracts? nil
   :h (^ (rel-B s w)
         (rel-> s u))
-  (exists-v-wfs s u w))
+  :b (exists-v-wfs s u w))

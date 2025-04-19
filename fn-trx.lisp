@@ -28,8 +28,8 @@
   ;; A message already seen is not forwarded.
   ;; We assume that each messages is augmented with a timestamp such that no
   ;; two messages are the same.
-  (if (v (member-equal m (mget :pending pst))
-         (member-equal m (mget :seen pst)))
+  (if (v (in m (mget :pending pst))
+         (in m (mget :seen pst)))
       pst
     (mset :pending
           (cons m (mget :pending pst))
@@ -41,8 +41,8 @@
   :hints (("Goal" :in-theory (enable add-pending-psfn))))
 
 (property prop=add-pending-psfn-pending (m :mssg pst :ps-fn)
-  :h (! (v (member-equal m (mget :pending pst))
-           (member-equal m (mget :seen pst))))
+  :h (! (v (in m (mget :pending pst))
+           (in m (mget :seen pst))))
   (in m (mget :pending (add-pending-psfn m pst)))
   :hints (("Goal" :in-theory (enable add-pending-psfn))))
 
@@ -52,10 +52,10 @@
   :hints (("Goal" :in-theory (enable add-pending-psfn))))
 
 (encapsulate ()
-  (local
-   (property prop=in-member (x :tl m :all)
-     (iff (in m x)
-          (member-equal m x))))
+  ;; (local
+  ;;  (property prop=in-member (x :tl m :all)
+  ;;    (iff (in m x)
+  ;;         (in m x))))
   (property prop=add-pending-psfn-pending3 (m :mssg pst :ps-fn)
     :h (in m (mget :pending pst))
     (== (mget :pending (add-pending-psfn m pst))
@@ -66,15 +66,15 @@
   :function-contract-hints
   (("Goal" :in-theory (enable acl2::maximal-records-theory)))
   (v (endp s)
-     (^ (== nil (member-equal m (mget :seen (cdar s))))
-        (== nil (member-equal m (mget :pending (cdar s))))
+     (^ (nin m (mget :seen (cdar s)))
+        (nin m (mget :pending (cdar s)))
         (new-fn-mssgp m (cdr s)))))
 
 (property new-mssg=>not-seen-peer (s :s-fn p :peer m :mssg)
   :h (^ (new-fn-mssgp m s)
         (mget p s))
-  (! (v (member-equal m (mget :pending (mget p s)))
-        (member-equal m (mget :seen (mget p s)))))
+  (! (v (in m (mget :pending (mget p s)))
+        (in m (mget :seen (mget p s)))))
   :hints (("Goal" :in-theory (enable new-fn-mssgp
                                      acl2::maximal-records-theory))))
 
@@ -312,7 +312,7 @@
 
 (definecd join-fn (p :peer pubs subs :lot nbrs :lop s :s-fn) :s-fn
   :ic (^ (! (mget p s))
-	 (! (in p nbrs)))
+	 (nin p nbrs))
   (set-subs-sfn nbrs
                 subs
                 p

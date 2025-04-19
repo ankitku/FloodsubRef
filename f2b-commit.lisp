@@ -61,7 +61,7 @@
   (== (f2b-st (cdr (car s)) (insert-unique m ms))
       (f2b-st (cdr (car s)) ms))
   :hints (("Goal" :in-theory (enable new-fn-mssgp f2b-st ps-bnp)
-           :use ((:instance insert-unique-diff (x (mget :seen (cdr (car s))))
+           :use ((:instance insert-unique-diff-in (x (mget :seen (cdr (car s))))
                             (y ms))))))
 
 (property f2b-help-new-pending-mssg (s :s-fn m :mssg ms :lom)
@@ -155,7 +155,6 @@
   :h (mget p s)
   (mget p (f2b s)))
 
-;; Danger, Should be disabled later
 (propertyd prop=mget-f2b=mget (s :s-fn p :peer)
   (iff (mget p s)
        (mget p (f2b s))))
@@ -176,7 +175,7 @@
    (property prop=in-member (x :tl m :all)
      (iff (in m x)
           (member-equal m x))))
-
+     
   (property prop=in-fn-pending=>new-bn-mssgp-help (s :s-fn m :mssg ms :lom)
     :h (in m ms)
     (new-bn-mssgp m (f2b-help s ms))
@@ -185,18 +184,21 @@
      :induct :pro
      (:claim (consp (f2b-help s ms)))
      (:claim (new-bn-mssgp m (f2b-help (cdr s) ms)))
-     :r :s
+     (:r new-bn-mssgp) :s
      (:dv 1 2 2 1 1) :r :s :up :up :s :top
      (:claim (member-equal m ms)) :bash
      :pro :bash))
-
+  
+  (local
+   (in-theory (disable prop=in-member)))
+   
   (property prop=in-fn-pending=>new-bn-mssgp (s :s-fn m :mssg)
     :h (in m (fn-pending-mssgs s))
     (new-bn-mssgp m (f2b s)))
 
   (local
    (property h10 (w :s-fn x y :lom m :mssg)
-     :h (not (member-equal m x))
+     :h (! (in m x))
      (== (new-bn-mssgp m (f2b-help w (union-set x y)))
          (new-bn-mssgp m (f2b-help w y)))
      :instructions
@@ -236,8 +238,8 @@
 
   (propertyd prop=new-fn-mssgp-def (w :s-fn m :mssg)
     (== (new-fn-mssgp m w)
-        (^ (not (member-equal m (mget :seen (cdr (car w)))))
-           (not (member-equal m (mget :pending (cdr (car w)))))
+        (^ (! (in m (mget :seen (cdr (car w)))))
+           (! (in m (mget :pending (cdr (car w)))))
            (new-fn-mssgp m (cdr w))))
     :hints (("Goal" :in-theory (enable new-fn-mssgp))))
 
@@ -247,23 +249,23 @@
 
   (propertyd prop=!new-fn-mssgp-def (w :s-fn m :mssg)
     (=> (! (new-fn-mssgp m w))
-        (or (member-equal m (mget :seen (cdr (car w))))
-            (member-equal m (mget :pending (cdr (car w))))
+        (or (in m (mget :seen (cdr (car w))))
+            (in m (mget :pending (cdr (car w))))
             (not (new-fn-mssgp m (cdr w)))))
     :instructions
     (:pro
-     (:claim (! (^ (not (member-equal m (mget :seen (cdr (car w)))))
-                   (not (member-equal m (mget :pending (cdr (car w)))))
+     (:claim (! (^ (nin m (mget :seen (cdr (car w))))
+                   (nin m (mget :pending (cdr (car w))))
                    (new-fn-mssgp m (cdr w))))
              :hints (("Goal" :use ((:instance prop=new-fn-mssgp-def)))))
-     (:claim (or (member-equal m (mget :seen (cdr (car w))))
-                 (member-equal m (mget :pending (cdr (car w))))
+     (:claim (or (in m (mget :seen (cdr (car w))))
+                 (in m (mget :pending (cdr (car w))))
                  (not (new-fn-mssgp m (cdr w))))
              :hints (("Goal" :use
                       ((:instance prop=demorgan
-                                  (a (member-equal m (mget :seen (cdr (car
+                                  (a (in m (mget :seen (cdr (car
                                                                        w)))))
-                                  (b (member-equal m (mget :pending (cdr (car
+                                  (b (in m (mget :pending (cdr (car
                                                                           w)))))
                                   (c (new-fn-mssgp m (cdr w))))))))
      (:demote 5) :s))
@@ -275,12 +277,12 @@
     :instructions
     (:pro
      :induct :bash :pro
-     (:claim (or (member-equal m (mget :seen (cdr (car w))))
-                 (member-equal m (mget :pending (cdr (car w))))
+     (:claim (or (in m (mget :seen (cdr (car w))))
+                 (in m (mget :pending (cdr (car w))))
                  (not (new-fn-mssgp m (cdr w))))
      :hints (("Goal" :use ((:instance prop=!new-fn-mssgp-def)))))
     
-    (:casesplit (member-equal m (mget :pending (cdr (car w)))))
+    (:casesplit (in m (mget :pending (cdr (car w)))))
     (:claim (in m (mget :pending (cdr (car w)))))
     (= (fn-pending-mssgs w)
        (union-set (mget :pending (cdr (car w)))
@@ -317,9 +319,9 @@
                                          (ms (fn-pending-mssgs w)))))))
      :s :top :pro
      
-     (:claim (member-equal m (mget :seen (cdr (car w)))))
-     (:claim (member-equal m (fn-pending-mssgs w)))
-     (:prove :hints (("Goal" :use ((:instance prop=in-member (x (fn-pending-mssgs w)))))))
+     (:prove :hints (("Goal" :use ((:instance in-diff1
+                                              (x (mget :seen (cdr (car w))))
+                                              (y (fn-pending-mssgs w)))))))
 
      (:claim (not (new-fn-mssgp m (cdr w))))
      (:claim (== (f2b (cdr w))
@@ -389,7 +391,7 @@
 
   (local
    (property prop=new-bn-mssgp-cdr (m :mssg s :s-fn)
-     :h (^ (! (member-equal m (mget :pending (cdr (car s)))))
+     :h (^ (! (in m (mget :pending (cdr (car s)))))
            (new-bn-mssgp m (f2b-help (cdr s) (fn-pending-mssgs (cdr s)))))
      (new-bn-mssgp m (f2b-help (cdr s) (fn-pending-mssgs s)))
      :instructions
@@ -410,29 +412,24 @@
     (new-bn-mssgp m (f2b s))
     :instructions
     (:pro
-     :induct :bash
-     :pro
-     (:claim (== (new-fn-mssgp m s) (^ (== nil (member-equal m (mget :seen (cdar s))))
-                                       (== nil (member-equal m (mget :pending (cdar s))))
-                                       (new-fn-mssgp m (cdr s)))))
-     :s
-     :pro
+     :induct :bash :pro
+     (:claim (^ (nin m (mget :seen (cdar s)))
+                (nin m (mget :pending (cdar s)))
+                (new-fn-mssgp m (cdr s))))
+     :s :pro
+     (:claim (^ (nin m (mget :seen (cdar s)))
+                (nin m (mget :pending (cdar s)))
+                (new-fn-mssgp m (cdr s))))
+     :s :pro
      (:claim (new-bn-mssgp m (f2b (cdr s))))
-     (:r 2)
+     (:r new-bn-mssgp) :s
      (:claim (consp (f2b-help s (fn-pending-mssgs s))))
-     (:claim (! (member-equal m (mget :seen (cdr (car s))))))
-     (:claim (! (member-equal m (mget :seen
-                                      (cdar (f2b-help s (fn-pending-mssgs s)))))))
+     (:claim (! (in m (mget :seen (cdr (car s))))))
+     (:claim (! (in m (mget :seen
+                            (cdar (f2b-help s (fn-pending-mssgs s)))))))
      :s
-     (:claim (! (member-equal m (mget :seen (f2b-st (cdr (car s))
-                                                    (fn-pending-mssgs s))))))
-     (:claim (! (member-equal m (mget :seen (cdr (car (f2b s)))))))
-     (:claim (not
-              (in m (mget :seen
-                          (cdr (car (f2b-help s (fn-pending-mssgs s))))))))
-
-
      (:claim (new-bn-mssgp m (f2b-help (cdr s) (fn-pending-mssgs (cdr s)))))
+     (:claim (! (in m (mget :pending (cdr (car s))))))
      (:claim (new-bn-mssgp m (f2b-help (cdr s) (fn-pending-mssgs s)))
              :hints (("Goal" :use ((:instance prop=new-bn-mssgp-cdr)))))
              
@@ -450,7 +447,6 @@
    (:claim (mget (mget :or m) (f2b s)))
    :s))
            
-
 (propertyd prop=f2b-produce-hyps (s :s-fn m :mssg)
   :h (^ (mget (mget :or m) (f2b s))
         (in (mget :tp m)
@@ -475,8 +471,8 @@
   (:pro
    (:dv 1 1)
    (:r 2) :s :up (:r 2) :s
-   (:claim (! (v (member-equal m (mget :pending (mget (mget :or m) s)))
-                 (member-equal m (mget :seen (mget (mget :or m) s)))))
+   (:claim (! (v (in m (mget :pending (mget (mget :or m) s)))
+                 (in m (mget :seen (mget (mget :or m) s)))))
            :hints (("Goal" :use ((:instance new-mssg=>not-seen-peer
                                             (p (mget :or m)))))))                  
 
@@ -626,8 +622,13 @@
   :instructions
   (:pro
    (:claim (ps-fnp (new-joinee-st-fn pubs subs nbrs s)))
-   (:prove :hints (("Goal" :in-theory (enable f2b-st
-                                              new-joinee-st-fn)
+   (:claim (== (new-joinee-st-fn pubs subs nbrs s)
+               (ps-fn pubs subs (calc-nsubs-fn nbrs s '()) '() '())))
+   (:demote 5)
+   (:equiv (new-joinee-st-fn pubs subs nbrs s)
+           (ps-fn pubs subs (calc-nsubs-fn nbrs s '()) '() '()))
+   :pro
+   (:prove :hints (("Goal" :in-theory (enable f2b-st ps-bnp)
                     :use ((:instance prop=f2b-st-check
                                      (ps (new-joinee-st-fn
                                           pubs subs nbrs s))
@@ -862,7 +863,6 @@
 (property prop=forward-fn (p :peer m :mssg s :s-fn)
   :h (^ (mget p s)
         (in m (mget :pending (mget p s)))
-        ;; (B s u)
         (== (fn-pending-mssgs (forward-fn p m s))
             (fn-pending-mssgs s)))
   (== (f2b (forward-fn p m s))
@@ -873,268 +873,6 @@
 (in-theory (disable prop=mget-f2b=mget f2b f2b-definition-rule
                     f2b-help f2b-help-definition-rule
                     fn-pending-mssgs fn-pending-mssgs-definition-rule))
-
-
-;;------------------ RANK FUNCTION AND RELATED PROPERTIES -----------------------------
-
-;; (definec m-nct (m :mssg s :s-fn) :nat
-;;   (match s
-;;     (() 0)
-;;     (((& . pst) . rst)
-;;      (+ (if (! (in m (mget :seen pst)))
-;;             1
-;;           0)
-;;         (m-nct m rst)))))
-
-;; (property prop=m-nct-upper-bound (m :mssg s :s-fn)
-;;   (<= (m-nct m s)
-;;       (len s)))
-
-;; (definec rankl (m :mssg s :s-fn) :nat
-;;   (if (new-fn-mssgp m s)
-;;       (1+ (len s))
-;;     (m-nct m s)))
-
-;; (property prop=f2b-update-forwarder-rank (p :peer m :mssg s :s-fn ms :lom)
-;;   :h (^ (mget p s)
-;;         (in m (mget :pending (mget p s)))
-;;         (! (in m (mget :seen (mget p s)))))
-;;     (< (m-nct m (update-forwarder-fn p m s))
-;;        (m-nct m s))
-;;   :instructions
-;;   (:pro
-;;    (:induct (tlp s)) :bash :pro
-   
-;;    (:casesplit (== (car (car s)) p))
-;;    (:dv 1 2) (:r 2) :s :up :r :s
-;;    (= (forwarder-new-pst (cdr (car s)) m)
-;;       (mset :pending
-;;             (remove-equal m (mget :pending (cdr (car s))))
-;;             (mset :seen
-;;                   (insert-unique m (mget :seen (cdr (car s))))
-;;                   (cdr (car s))))
-;;       :hints (("Goal" :in-theory (enable forwarder-new-pst))))
-;;    (:claim (in m (mget :seen (forwarder-new-pst (cdr (car s)) m)))
-;;            :hints (("Goal" :in-theory (enable forwarder-new-pst))))
-;;    (:claim (in m (insert-unique m (mget :seen (cdr (car s))))))
-;;    :s :up
-;;    (= (m-nct m s)
-;;       (+ 1 (m-nct m (cdr s))))
-;;    :s :bash
-;;    (= (cons (cons p (forwarder-new-pst (cdr (car s)) m))
-;;             (cdr s))
-;;       (update-forwarder-fn p m s))
-;;    :bash
-
-;;    (:claim (mget p (cdr s))
-;;            :hints (("Goal" :use ((:instance prop=mget-cdr)))))
-;;    (:claim (== (mget p s) (mget p (cdr s)))
-;;            :hints (("Goal" :in-theory (enable acl2::maximal-records-theory))))
-;;    (:claim (! (in m (mget :seen (mget p (cdr s))))))
-;;    (:claim (< (m-nct m (update-forwarder-fn p m (cdr s)))
-;;               (m-nct m (cdr s))))
-
-
-;;    (:dv 1 2) (:r 2) :s :top
-;;    (= (m-nct m s)
-;;       (m-nct m (cons (car s) (cdr s))))
-;;    (:dv 1) :r :s :up (:dv 2) :r :s :up
-;;    (:casesplit (in m (mget :seen (cdr (car s)))))
-;;    :s :s :bash :bash
-;;    (= (cons (car s)
-;;             (update-forwarder-fn p m (cdr s)))
-;;       (update-forwarder-fn p m s))
-;;    :bash))
-
-;; (property prop=forward-help-fn-rank (p :peer s :s-fn m :mssg nbrs :lop)
-;;   (= (m-nct m (forward-help-fn s nbrs m))
-;;      (m-nct m s))
-;;   :instructions
-;;   (:pro
-;;    :induct :bash :pro
-
-   
-;;    (:dv 1 2) (:r 2) :s :up
-;;    :r :s
-;;    (= (m-nct m (forward-help-fn (cdr s) nbrs m))
-;;       (m-nct m (cdr s)))
-   
-
-;;    :top
-;;    (= (mget :seen (add-pending-psfn m (cdr (car s))))
-;;       (mget :seen (cdr (car s))))
-;;    (:casesplit (in (car (car s)) nbrs))
-;;    :s :bash :bash
-;;    (= (if (in (car (car s)) nbrs)
-;;            (cons (cons (car (car s))
-;;                        (add-pending-psfn m (cdr (car s))))
-;;                  (forward-help-fn (cdr s) nbrs m))
-;;          (cons (car s)
-;;                (forward-help-fn (cdr s) nbrs m)))
-;;       (forward-help-fn s nbrs m)
-;;       :hints (("Goal" :in-theory (enable forward-help-fn))))
-;;    :s
-
-;;    :pro
-;;    (= (forward-help-fn s nbrs m)
-;;       nil
-;;       :hints (("Goal" :in-theory (enable forward-help-fn))))
-;;    :s))
-
-;; (encapsulate ()
-  
-;;   (local
-;;    (property prop=m-nct-notin-car (m :mssg s :s-fn)
-;;      :h (^ s
-;;            (not (in m (mget :seen (cdr (car s))))))
-;;      (< (m-nct m (cdr s))
-;;         (m-nct m s))))
-
-;;   (local
-;;    (property prop=m-nct-cdr-in-car (m :mssg s :s-fn)
-;;      :h (^ s
-;;            (in m (mget :seen (cdr (car s)))))
-;;      (= (m-nct m (cdr s))
-;;         (m-nct m s))))
-
-;;   (local
-;;    (in-theory (enable acl2::maximal-records-theory)))
-
-;;   (property prop=m-nct-mset-add-pending (p :peer s :s-fn m :mssg)
-;;     :h (^ (mget p s)
-;;           (! (in m (mget :seen (mget p s)))))
-;;     (= (m-nct m (mset p (add-pending-psfn m (mget p s)) s))
-;;        (m-nct m s))
-;;     :instructions
-;;     (:pro
-;;      :induct :bash
-;;      :pro
-;;      (:casesplit (== p (car (car s))))
-;;      (= (mget p s) (cdr (car s)))
-;;      (:dv 1 2) :r
-;;      (:claim (consp (add-pending-psfn m (cdr (car s)))))
-;;      :s :up
-;;      (:claim (! (in m (mget :seen (add-pending-psfn m (cdr (car s)))))))
-;;      :r
-;;      (:claim (consp (cons (cons p (add-pending-psfn m (cdr (car s))))
-;;                           (cdr s))))
-;;      (:claim (consp (car (cons (cons p (add-pending-psfn m (cdr (car s))))
-;;                                (cdr s)))))
-;;      :s :top :bash :bash
-
-;;      (:claim (mget p (cdr s)))
-;;      (:claim (! (in m (mget :seen (mget p (cdr s))))))
-;;      (:claim (= (m-nct m
-;;                        (mset p (add-pending-psfn m (mget p (cdr s)))
-;;                              (cdr s)))
-;;                 (m-nct m (cdr s))))
-;;      (:dv 1 2) :r (:claim s)
-;;      (:claim (! (lexorder p (car (car s))))) :s :up :r :s
-;;      (:casesplit (in m (mget :seen (cdr (car s))))) :s
-;;      :top
-;;      (= (m-nct m s) (m-nct m (cdr s))) :s
-;;      (= (m-nct m s) (m-nct m (cdr s))) :s
-     
-;;      (= (mget p s) (mget p (cdr s)))
-;;      (= (m-nct m s) (m-nct m (cdr s))) :s
-;;      :top :s :bash :bash :pro :bash))
-
-
-;;   (property prop=new-fn-mssgp-produce-fn (p :peer m :mssg s :s-fn)
-;;     :h (^ (mget (mget :or m) s)
-;;           (new-fn-mssgp m s)
-;;           (in (mget :tp m)
-;;               (mget :pubs (mget  (mget :or m) s))))
-;;     (! (new-fn-mssgp m (produce-fn m s)))
-;;     :instructions
-;;     (:pro
-;;      (:dv 1 2) (:r 2) :s :top
-;;      (:claim (! (in m (mget :pending (mget (mget :or m) s)))))
-;;      (:claim (! (in m (mget :seen (mget (mget :or m) s)))))
-;;      (:claim (! (member-equal m (mget :pending (mget (mget :or m) s)))))
-;;      (:claim (! (member-equal m (mget :seen (mget (mget :or m) s)))))
-;;      (:claim (in m (mget :pending (add-pending-psfn m (mget (mget :or m) s))))
-;;              :hints (("Goal" :use ((:instance prop=add-pending-psfn-pending
-;;                                       (pst (mget (mget :or m) s)))))))
-;;      :bash))
-
-;;  (local
-;;   (property prop=forwarder-new-pst-m (p :peer m :mssg s :s-fn)
-;;     :h (mget p s)
-;;     (in m (mget :seen (forwarder-new-pst (mget p s) m)))
-;;     :instructions
-;;     (:pro (:dv 2 2) :r :up :s :up (:r 4))))
-
-;;  (property prop=forward-fn-peer-state (p :peer m :mssg s :s-fn)
-;;    :h (^ (mget p s)
-;;          (in m (mget :pending (mget p s)))
-;;          (not (in m (mget :seen (mget p s))))
-;;          (not (in p (mget (mget :tp m)
-;;                           (mget :nsubs (mget p s))))))
-;;    (== (mget p (forward-fn p m s))
-;;        (forwarder-new-pst (mget p s) m))
-;;    :hints (("Goal" :in-theory (enable forward-fn
-;;                                       forward-help-fn))))
-
-;;   (property prop=new-fn-mssgp-forward-fn (p :peer m :mssg s :s-fn)
-;;     :h (^ (mget p s)
-;;           (in m (mget :pending (mget p s)))
-;;           (not (in m (mget :seen (mget p s))))
-;;           (not (in p (mget (mget :tp m)
-;;                            (mget :nsubs (mget p s))))))
-;;     (! (new-fn-mssgp m (forward-fn p m s)))
-;;     :instructions
-;;     (:pro
-;;      (:claim (== (mget p (forward-fn p m s))
-;;                  (forwarder-new-pst (mget p s) m))
-;;              :hints (("Goal" :use (prop=forward-fn-peer-state))))
-;;      (:claim (in m (mget :seen (forwarder-new-pst (mget p s) m)))
-;;              :hints (("Goal" :use (prop=forwarder-new-pst-m))))
-;;      (:prove :hints (("Goal" :use ((:instance prop=new-fn-mssgp2
-;;                                               (s (forward-fn p m s)))))))))
-
-
-;;   (property prop=forward-fn-rank (p :peer m :mssg s :s-fn)
-;;     :h (^ (mget p s)
-;;           (in m (mget :pending (mget p s)))
-;;           (! (in m (mget :seen (mget p s))))
-;;           (not (in p (mget (mget :tp m)
-;;                            (mget :nsubs (mget p s))))))
-;;     (< (rankl m (forward-fn p m s))
-;;        (rankl m s))
-;;     :instructions
-;;     (:pro
-;;      (:claim (! (new-fn-mssgp m (forward-fn p m s)))
-;;              :hints (("Goal" :use prop=new-fn-mssgp-forward-fn)))
-;;      :bash
-;;      (:dv 1 2) (:r 2) :s :top
-;;      (= (m-nct m (forward-help-fn (update-forwarder-fn p m s)
-;;                                   (mget (mget :tp m)
-;;                                         (mget :nsubs (mget p s)))
-;;                                   m))
-;;         (m-nct m (update-forwarder-fn p m s))
-;;         :hints (("Goal" :use ((:instance prop=forward-help-fn-rank
-;;                                          (s (update-forwarder-fn p m s))
-;;                                          (nbrs (mget (mget :tp m)
-;;                                                      (mget :nsubs (mget p
-;;                                                                         s)))))))))
-;;      (:prove :hints (("Goal" :use (prop=f2b-update-forwarder-rank)))))))
-              
-
-;; (property prop=produce-fn-rank (m :mssg s :s-fn)
-;;   :h (^ (mget (mget :or m) s)
-;;         (new-fn-mssgp m s)
-;;         (in (mget :tp m)
-;;             (mget :pubs (mget  (mget :or m) s))))
-;;   (< (rankl m (produce-fn m s))
-;;      (rankl m s))
-;;   :instructions
-;;   (:pro
-;;    (:dv 1) (:r 2) :s (:dv 2) (:r 2) :s :up
-;;    (:claim (! (in m (mget :seen (mget (mget :or m) s)))))
-;;    :r :top
-;;    (:claim (<= (m-nct m s) (len s)))
-;;    (:dv 2) :r :s :up :bash))
 
 
 (in-theory (disable f2b f2b-definition-rule forward-fn forward-fn-definition-rule

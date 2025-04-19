@@ -125,10 +125,18 @@
    (property prop=in-member (x :tl m :all)
      (iff (in m x)
           (member-equal m x))))
+  
   (property set-diff-insert-unique2 (x y :tl m :all)
     :h (in m y)
     (== (set-difference-equal (insert-unique m x) y)
-        (set-difference-equal x y))))
+        (set-difference-equal x y)))
+
+  (property insert-unique-diff-in (x y :tl m :all)
+    :h (not (in m x))
+    (== (set-difference-equal x (insert-unique m y))
+        (set-difference-equal x y))
+    :hints (("Goal" :use ((:instance
+                           insert-unique-diff))))))
 
 (property diff-nil (x :tl)
   (== (set-difference-equal x '())
