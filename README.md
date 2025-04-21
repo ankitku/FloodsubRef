@@ -2,15 +2,15 @@
 # Contents 
 This repository includes the following artifacts:
 1. **Formal models**: Executable, publicly available transition system
-representations of Floodsub (fn.lisp) and Broadcastsub (bn.lisp).
-2. **Formalized notions of correctness**: The formalization of the WEB
-refinement which includes defining the refinement map, an
-equivalence relation among related states of Floodsub and
-Broadcastsub, well founded functions and the formalized WEB
- conditions, in f2b-commit.lisp and f2b-ref2.lisp.
-3. **Mechanized refinement proof**: A formally verified proof of the WEB
-  conditions in ACL2s demonstrating that Floodsub refines Broadcastsub
-  under connected network assumptions.
+representations of Floodnet (fn-trx.lisp) and Broadcastnet
+(bn-trx.lisp).
+2. **Transition Relations**: Transition relations expressed as boolean
+   functions over Floodnet and Broadcastnet states in trx-rels.lisp.
+2. **Formalized notions of correctness**: The formalization of the Wfs
+refinement which includes defining the refinement map and rel-B
+relation in f2b-sim-ref.lisp.
+3. **Mechanized refinement proof**: A formally verified proof of the Wfs
+  conditions in ACL2s demonstrating that Floodsub refines Broadcastsub.
   
 # Build
  The proofs of refinement, along with the Broadcastsub and Floodsub

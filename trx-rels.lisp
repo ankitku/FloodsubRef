@@ -89,9 +89,9 @@
                                         (ps (cdr (car s))))))))
    (= (in m (set-difference-equal (mget :seen (cdr (car s))) ms))
       (in m (mget :seen (cdr (car s))))
-      :hints (("Goal" :use ((:instance in-m-set-diff
-                                       (xs (mget :seen (cdr (car s))))
-                                       (ys ms))))))
+      :hints (("Goal" :use ((:instance in-diff1
+                                       (x (mget :seen (cdr (car s))))
+                                       (y ms))))))
    (= (car (car (f2b-help s ms)))
       (car (car s))
       :hints (("Goal" :use ((:instance prop=f2b-helper-caar)))))

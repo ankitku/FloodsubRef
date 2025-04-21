@@ -20,7 +20,7 @@
   :function-contract-hints
   (("Goal" :in-theory (enable acl2::maximal-records-theory)))
   (v (endp s)
-     (^ (! (in m (mget :seen (cdar s))))
+     (^ (nin m (mget :seen (cdar s)))
         (new-bn-mssgp m (cdr s)))))
 
 ;; Broadcast conditions

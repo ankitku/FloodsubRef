@@ -65,7 +65,7 @@
 ;; WFS 1
 (property b-maps-f2b (s :s-fn)
   :h (good-s-fnp s)
-  (rel-B s (f2b s)))
+  :b (rel-B s (f2b s)))
 
 
 ;; WFS 2
@@ -76,8 +76,8 @@
 
 (property wfs2 (s w :borf)
   :h (rel-B s w)
-  (== (L s)
-      (L w))
+  :b (== (L s)
+         (L w))
   :hints (("Goal" :in-theory (enable rel-B))))
 
 ;; WFS 3 provables
@@ -926,7 +926,7 @@
   :check-contracts? nil
   :h (^ (rel-B s w)
         (rel-> s u))
-  (exists-v-wfs s u w)
+  :b (exists-v-wfs s u w)
   :hints (("Goal" :use ((:instance wfs3-help)
                         (:instance exists-v-wfs-suff
                                    (v (exists-v s u w)))))))

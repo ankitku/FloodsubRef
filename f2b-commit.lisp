@@ -185,7 +185,7 @@
      (:claim (consp (f2b-help s ms)))
      (:claim (new-bn-mssgp m (f2b-help (cdr s) ms)))
      (:r new-bn-mssgp) :s
-     (:dv 1 2 2 1 1) :r :s :up :up :s :top
+     (:dv 2 2 1 1) :r :s :up :up :s :top
      (:claim (member-equal m ms)) :bash
      :pro :bash))
   
@@ -222,6 +222,7 @@
                                           (ps (cdr (car w)))
                                           (ms (union-set x y)))))))
       (:claim (not (in m x)))
+      (:dv 1) :r
       (= (in m (set-difference-equal (mget :seen (cdr (car w)))
                                      (union-set x y)))
          (in m (mget :seen (cdr (car (f2b-help w y)))))
@@ -230,7 +231,7 @@
       :top
       (:claim (consp (f2b-help w y)))
       (:dv 2) (:r 2) :s :top :s
-      :bash :bash)))
+      :bash :bash :bash)))
 
   (propertyd prop=f2b-cons (w :s-fn)
     :h w
@@ -427,6 +428,8 @@
      (:claim (! (in m (mget :seen (cdr (car s))))))
      (:claim (! (in m (mget :seen
                             (cdar (f2b-help s (fn-pending-mssgs s)))))))
+     (:claim (nin m (mget :seen
+                          (cdar (f2b-help s (fn-pending-mssgs s))))))
      :s
      (:claim (new-bn-mssgp m (f2b-help (cdr s) (fn-pending-mssgs (cdr s)))))
      (:claim (! (in m (mget :pending (cdr (car s))))))
@@ -1204,21 +1207,14 @@
           :bash
           :bash)))
 
-(property in-m-set-diff (m :all xs ys :tl)
-  :h (^ (in m xs)
-        (! (in m ys)))
-  (in m (set-difference-equal xs ys)))
-
-
 (property prop=f2b-st-broadcast (m :mssg ms :lom pst :ps-fn)
   :h (^ (in m (mget :seen pst))
         (! (in m ms))
         (orderedp (mget :seen pst)))
   (== (f2b-st pst ms)
-      (mset :seen
-            (insert-unique m
-                           (mget :seen
-                                 (f2b-st pst ms)))
+      (mset :seen (insert-unique m
+                                 (mget :seen
+                                       (f2b-st pst ms)))
             (f2b-st pst ms)))
   :instructions
   (:pro
@@ -1226,7 +1222,10 @@
    (= (set-difference-equal (mget :seen pst) ms)
       (insert-unique m
                      (set-difference-equal (mget :seen pst)
-                                           ms)))
+                                           ms))
+      :hints (("Goal" :use ((:instance in-diff1
+                                       (x (mget :seen pst))
+                                       (y ms))))))
    :top
    (:prove :hints (("Goal" :in-theory (enable f2b-st))))))
    
@@ -2150,7 +2149,7 @@
                     prop=brd-receivers-update-forwarder-pcaars1
                     prop=update-forwarder-seen4
                     prop=update-forwarder-seen2
-                    prop=update-forwarder-seen1 in-m-set-diff
+                    prop=update-forwarder-seen1
                     prop=f2b-st-forwarder2
                     prop=brd-receivers-update-forwarder3 prop=ordered-seen-f2b-st
                     prop=brd-receivers-update-forwarder2 prop=ordered-seenp-cdar
