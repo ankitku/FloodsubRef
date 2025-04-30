@@ -5,6 +5,7 @@
 ;; Proof of refinement : FloodNet refines BroadcastNet
 ;; ------------------------------------------------------- 
 
+;; Combined states
 (defdata borf (v s-bn s-fn))
 
 (property bn->borf (x :s-bn)
@@ -23,6 +24,7 @@
   (null x) 
   :rule-classes :forward-chaining)
 
+;; Combined transition relation
 (definec rel-> (s u :borf) :bool
   (v (^ (s-fnp s)
         (s-fnp u)
@@ -47,7 +49,8 @@
      (s-bnp y)
      (good-s-fnp x)
      (== y (f2b x))))
-  
+
+;; B relation relating states
 (definec rel-B (x y :borf) :boolean
   (v (rel-wf x y)
      (== x y)))
@@ -815,6 +818,7 @@
    ((^ (s-fnp s) (s-bnp w)) (exists-v1 s u))
    ((^ (s-fnp s) (s-fnp w)) u)))
 
+;; Witness function producing state v
 (definec exists-v (s u w :borf) :borf
   :function-contract-hints (("Goal" :in-theory
                              (disable exists-nil-v-definition-rule
@@ -916,7 +920,7 @@
            :hints (("Goal" :in-theory (enable rel-b))))
    :s))
 
-
+;; WFS3
 (defun-sk exists-v-wfs (s u w)
   (exists (v)
     (^ (rel-> w v)
