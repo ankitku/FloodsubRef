@@ -52,10 +52,6 @@
   :hints (("Goal" :in-theory (enable add-pending-psfn))))
 
 (encapsulate ()
-  ;; (local
-  ;;  (property prop=in-member (x :tl m :all)
-  ;;    (iff (in m x)
-  ;;         (in m x))))
   (property prop=add-pending-psfn-pending3 (m :mssg pst :ps-fn)
     :h (in m (mget :pending pst))
     (== (mget :pending (add-pending-psfn m pst))

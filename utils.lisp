@@ -1,8 +1,8 @@
 (in-package "ACL2S")
 
 (definec <<= (x :all y :all) :bool
-  (or (== x y)
-      (<< x y)))
+  (v (== x y)
+     (<< x y)))
 
 (definec insert-unique (a :all x :tl) :tl
   (match x
@@ -22,24 +22,24 @@
       (insert-unique b (insert-unique a x))))
 
 (property insert-unique-insert-unique (a :all x :tl)
-          (== (insert-unique a (insert-unique a x))
-              (insert-unique a x)))
+  (== (insert-unique a (insert-unique a x))
+      (insert-unique a x)))
 
 (property isort-set-insert-unique-commute (x :tl a :all)
-          (== (isort-set (insert-unique a x))
-              (insert-unique a (isort-set x))))
+  (== (isort-set (insert-unique a x))
+      (insert-unique a (isort-set x))))
 
 (property isort-set-isort-set-eq (x :tl)
-          (== (isort-set (isort-set x))
-              (isort-set x)))
+  (== (isort-set (isort-set x))
+      (isort-set x)))
 
 (property isort-set-app-mid (x y :tl a :all)
   (== (isort-set (append y (cons a x)))
       (insert-unique a (isort-set (append y x)))))
 
 (property isort-set-nil (x :tl)
-		  (== (not (isort-set x))
-              (not x)))
+  (== (not (isort-set x))
+      (not x)))
 
 (property in-isort-set (x :tl m :all)
   (== (in m (isort-set x))
@@ -56,20 +56,20 @@
     ((r . rs) (insert-unique r (union-set rs y)))))
 
 (property union-set-mid (x y :tl a :all)
-          (== (union-set x (cons a y))
-              (insert-unique a (union-set x y))))
+  (== (union-set x (cons a y))
+      (insert-unique a (union-set x y))))
 
 (property union-set-mid2 (x y :tl a :all)
-          (== (union-set (cons a x) y)
-              (insert-unique a (union-set x y))))
+  (== (union-set (cons a x) y)
+      (insert-unique a (union-set x y))))
 
 (property union-set-mid3 (x y :tl a :all)
-          (== (union-set x (insert-unique a y))
-              (insert-unique a (union-set x y))))
+  (== (union-set x (insert-unique a y))
+      (insert-unique a (union-set x y))))
 
 (property isort-set-union-set (x y :tl)
-          (== (isort-set (union-set x y))
-              (union-set x y)))
+  (== (isort-set (union-set x y))
+      (union-set x y)))
 
 (property prop=union-set-nil (x :tl)
   (== (union-set x nil)
@@ -87,10 +87,9 @@
   (=> (not (union-set x y))
       (^ (endp x)
          (endp y))))
-      
+
 (property union-set-isort-set (x y :tl)
-  (== (union-set x
-                 (isort-set x))
+  (== (union-set x (isort-set x))
       (isort-set x)))
 
 (property member-insert-unique (x :tl m n :all)
@@ -382,9 +381,9 @@
         (subsetp-equal x y)
         (== (isort-set y) y))
   (== (insert-unique (car x) y) y)
-   :hints (("Goal" :use ((:instance insert-member-isort
-                                                 (m (car x))
-                                                 (x y))))))
+  :hints (("Goal" :use ((:instance insert-member-isort
+                                   (m (car x))
+                                   (x y))))))
 
 (property prop=subsetp-equal-isort-set (x y :tl)
   :h (^ (subsetp-equal x y)

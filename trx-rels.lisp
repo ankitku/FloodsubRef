@@ -858,7 +858,7 @@
           (pst (cdr (fn-join-witness s u)))
           (nbrs (topic-lop-map->lop (mget :nsubs pst))))
        (^ (! (mget p s))
-          (! (in p nbrs))
+          (nin p nbrs)
           (== u (join-fn p
                          (mget :pubs pst)
                          (mget :subs pst)

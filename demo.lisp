@@ -2,7 +2,7 @@
 (include-book "f2b-sim-ref")
 
 ;;---------------------------------------------------
-;; Broadcast Network state and transition
+;; Broadcast Network state and transition relations
 ;;---------------------------------------------------
 
 ;; A Broadcastnet state is a map from peers to their states
@@ -79,7 +79,7 @@
 ;; A message is broadcast if it is new i.e. not already in the network.
 (definecd new-bn-mssgp (m :mssg s :s-bn) :bool
   (v (endp s)
-     (^ (! (in m (mget :seen (cdar s))))
+     (^ (nin m (mget :seen (cdar s)))
         (new-bn-mssgp m (cdr s)))))
 
 ;; Broadcast m to all peers in ps
@@ -112,8 +112,9 @@
   (match st
     (() nil)
     (((p . pst) . rst)
-     (cons `(,p . ,(if (in (mget :tp m)
-                           (mget :subs pst))
+     (cons `(,p . ,(if (v (in (mget :tp m)
+                              (mget :subs pst))
+                          (== p (mget :or m)))
                        (mset :seen
                              (insert-unique m (mget :seen pst))
                              pst)
@@ -210,7 +211,7 @@
     ((r . rst) (cons r (leave-bn p rst)))))
 
 ;;---------------------------------------------------
-;; Floods Network state and transition
+;; Floods Network state and transition relations
 ;;---------------------------------------------------
 
 ;; A Floodnet state is a map from peers to their states
@@ -264,8 +265,8 @@
 ;; A message is produced if it is new i.e. not already in the network.
 (definecd new-fn-mssgp (m :mssg s :s-fn) :bool
   (v (endp s)
-     (^ (== nil (member-equal m (mget :seen (cdar s))))
-        (== nil (member-equal m (mget :pending (cdar s))))
+     (^ (nin m (mget :seen (cdar s)))
+        (nin m (mget :pending (cdar s)))
         (new-fn-mssgp m (cdr s)))))
 
 (definecd produce-fn (m :mssg s :s-fn) :s-fn
@@ -279,8 +280,8 @@
   ;; A message already seen is not forwarded.
   ;; We assume that each messages is augmented with a timestamp such that no
   ;; two messages are the same.
-  (if (v (member-equal m (mget :pending pst))
-         (member-equal m (mget :seen pst)))
+  (if (v (in m (mget :pending pst))
+         (in m (mget :seen pst)))
       pst
     (mset :pending
           (cons m (mget :pending pst))
@@ -301,8 +302,8 @@
         (rel-forward-help-fn s u rst)))))
 
 
-
-;; The peer that forwards the pending message m
+;; find-forwarder is a witness generating function that finds
+;; some peer that forwards the pending message m.
 (definec find-forwarder (s :s-fn m :mssg) :peer
     :ic (in m (fn-pending-mssgs s))
     :oc (^ (mget (find-forwarder s m) s)
@@ -356,10 +357,6 @@
                          (cdr (fn-topics-witness s u))
                          s))))
 
-;; Based on bn-topics-witness definition 
-(definec fn-topics-witness (s u :s-fn) :maybe-ptops
-  (bn-topics-witness (f2b s) (f2b u)))
-
 (definecd subscribe-fn (p :peer topics :lot s :s-fn) :s-fn
   :ic (mget p s)
   (let ((pst (mget p s)))
@@ -405,7 +402,7 @@
           (pst (cdr (fn-join-witness s u)))
           (nbrs (topic-lop-map->lop (mget :nsubs pst))))
        (^ (! (mget p s))
-          (! (in p nbrs))
+          (nin p nbrs)
           (== u (join-fn p
                          (mget :pubs pst)
                          (mget :subs pst)
@@ -415,15 +412,9 @@
 
 (defdata maybe-ppsfn (v nil (cons peer ps-fn)))
 
-(definec fn-join-witness (s u :s-fn) :maybe-ppsfn
-  (b* ((res (bn-join-witness (f2b s) (f2b u)))
-       ((when (null res)) nil))
-    (cons (car res)
-          (mget (car res) u))))
-
 (definecd join-fn (p :peer pubs subs :lot nbrs :lop s :s-fn) :s-fn
   :ic (^ (! (mget p s))
-	 (! (in p nbrs)))
+	 (nin p nbrs))
   (set-subs-sfn nbrs
                 subs
                 p
@@ -514,16 +505,8 @@
      (rel-step-fn s u)))
 
 (definec good-s-fnp (s :s-fn) :bool
-  (^ (pending-!in-seen-s-fn s)
-     (p!in-nsubs-s-fn s)
+  (^ (p!in-nsubs-s-fn s)
      (ordered-seenp s)))
-
-(definec pending-!in-seen-s-fn (s :s-fn) :bool
-  (match s
-    (() t)
-    (((& . pst) . rst)
-     (^ (pending-!in-seen-ps-fn pst (mget :pending pst))
-        (pending-!in-seen-s-fn rst)))))
 
 (definec p!in-nsubs-s-fn (s :s-fn) :bool
   (match s
@@ -601,9 +584,9 @@
 
 (definec exists-nil-v (u :borf) :borf
   :ic (^ u (rel-> nil u))
-  (cond
-   ((s-fnp u) (exists-v1 nil u))
-   ((s-bnp u) u)))
+  (match u
+    (:s-fn (exists-v1 nil u))
+    (:s-bn u)))
 
 (definec exists-cons-v (s u w :borf) :borf
   :ic (^ s
